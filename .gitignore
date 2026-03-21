@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OCaml / dune
+_build/
+*.install
+*.opam
+
+# OS / editor
+.DS_Store
+.vscode/

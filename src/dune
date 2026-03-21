@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (modules types tokenizer parser validator interpreter python_bridge utils main)
+ (libraries unix))
