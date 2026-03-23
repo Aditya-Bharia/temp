@@ -41,7 +41,7 @@ type token_kind =
   (* ──THIS IS THE END ── *)
   | END
 
-type token = { kind : token_kind; text : string; lit_val : string }
+type token = { kind : token_kind; text : string; lit_val : string; line : int; col : int;}
 
 (* ── Keyword hash table ── *)
 let keyword_table : (string, token_kind) Hashtbl.t = Hashtbl.create 64
@@ -72,93 +72,104 @@ let () =
 let str_to_kind str =
   match Hashtbl.find_opt keyword_table str with
   | Some k -> k
-  | None   -> IDF
+  | None -> IDF
 
 (* ── Character level helpers ── *)
-let rec read_string str chars =
+let rec read_string str chars line col =
   match chars with
-  | []                -> failwith "Lexer error: String not closed"
-  | '"'  :: tail      -> (str, tail)
-  | '\\' :: '"' :: tail -> read_string (str ^ "\"") tail  (* escape sequence  "say \"hello\"" as say hello and not say \*)
-  | c    :: tail      -> read_string (str ^ String.make 1 c) tail
+  | [] -> failwith (Printf.sprintf "Lexer error at line %d, col %d: String not closed" line col)
+  | '"'  :: tail -> (str, tail,line,col+1)
+  | '\\' :: '"' :: tail -> read_string (str ^ "\"") tail line (col + 2) (* escape sequence  "say \"hello\"" as say hello and not say \*)
+  | '\n' :: tail -> read_string (str ^ "\n") tail (line + 1) 1 (* a new line will reset the column count*)
+  | c :: tail -> read_string (str ^ String.make 1 c) tail line (col + 1)
 
-let rec read_number num chars =
+let rec read_number num chars line col =
   match chars with
-  | ('0'..'9') as d :: tail -> read_number (num ^ String.make 1 d) tail
-  | _                       -> (num, chars)
+  | ('0'..'9') as d :: tail -> read_number (num ^ String.make 1 d) tail line (col + 1)
+  | _ -> (num, chars, line, col)
 
-let rec read_identifier_or_keyword acc chars =
+let rec read_identifier_or_keyword acc chars line col =
   match chars with
-  | ('a'..'z' | 'A'..'Z' | '0'..'9' | '_') as c :: tail -> read_identifier_or_keyword (acc ^ String.make 1 c) tail
-  | _ -> (acc, chars)
+  | ('a'..'z' | 'A'..'Z' | '0'..'9' | '_') as c :: tail -> read_identifier_or_keyword (acc ^ String.make 1 c) tail line (col + 1)
+  | _ -> (acc, chars, line, col)
 
-let rec skip_line_comment chars =
+let rec skip_line_comment chars line col =
   match chars with
-  | []           -> []
-  | '\n' :: tail -> tail
-  | _    :: tail -> skip_line_comment tail
+  | [] -> ([], line, col)
+  | '\n' :: tail -> (tail , line+1, 1)
+  | _ :: tail -> skip_line_comment tail line (col + 1)
 
-let rec skip_block_comment chars =
+let rec skip_block_comment chars line  col =
   match chars with
-  | []                 -> failwith "Lexer error:Block comment not closed"
-  | '*' :: '/' :: tail -> tail
-  | _   :: tail        -> skip_block_comment tail
+  | [] -> failwith (Printf.sprintf "Lexer error at line %d, col %d :Block comment not closed" line col)
+  | '*' :: '/' :: tail -> (tail, line, col + 2)
+  | '\n' :: tail -> skip_block_comment tail (line + 1) 1
+  | _   :: tail -> skip_block_comment tail line(col + 1)
 
 (* ── Main tokenizer ── *)
-let rec tokenize chars =
+let rec tokenize chars line col =
   match chars with
-  | [] -> [ { kind = END; text = ""; lit_val = "null" } ]
+  | [] -> [ { kind = END; text = ""; lit_val = "null"; line; col } ]
+  | '\n' :: tail -> tokenize tail (line + 1) 1
   (* ── skips any whitespace ── *)
-  | (' ' | '\t' | '\n' | '\r') :: tail -> tokenize tail
+  | (' ' | '\t' | '\r') :: tail -> tokenize tail line (col + 1)
   (* ── comments ── *)
-  | '#' :: tail        -> tokenize (skip_line_comment tail)
-  | '/' :: '*' :: tail -> tokenize (skip_block_comment tail)
+  | '#' :: tail1 ->
+      let (tail2, new_line, new_col) = skip_line_comment tail1 line (col + 1) in
+      tokenize tail2 new_line new_col
+  | '/' :: '*' :: tail1 ->
+      let (tail2, new_line, new_col) = skip_block_comment tail1 line (col + 2) in
+      tokenize tail2 new_line new_col
   (* ── delimiters ── *)
-  | '{' :: tail -> { kind = LEFT_CURL;     text = "{"; lit_val = "null" } :: tokenize tail
-  | '}' :: tail -> { kind = RIGHT_CURL;    text = "}"; lit_val = "null" } :: tokenize tail
-  | '(' :: tail -> { kind = LEFT_PAR;      text = "("; lit_val = "null" } :: tokenize tail
-  | ')' :: tail -> { kind = RIGHT_PAR;     text = ")"; lit_val = "null" } :: tokenize tail
-  | '[' :: tail -> { kind = LEFT_BRACKET;  text = "["; lit_val = "null" } :: tokenize tail
-  | ']' :: tail -> { kind = RIGHT_BRACKET; text = "]"; lit_val = "null" } :: tokenize tail
-  | ',' :: tail -> { kind = COMMA;         text = ","; lit_val = "null" } :: tokenize tail
-  | '.' :: tail -> { kind = DOT;           text = "."; lit_val = "null" } :: tokenize tail
+  | '{' :: tail -> { kind = LEFT_CURL;     text = "{old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '}' :: tail -> { kind = RIGHT_CURL;    text = "}old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '(' :: tail -> { kind = LEFT_PAR;      text = "(old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | ')' :: tail -> { kind = RIGHT_PAR;     text = ")old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '[' :: tail -> { kind = LEFT_BRACKET;  text = "[old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | ']' :: tail -> { kind = RIGHT_BRACKET; text = "]old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | ',' :: tail -> { kind = COMMA;         text = ",old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '.' :: tail -> { kind = DOT;           text = ".old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
   (* ── arithmetic operators ── *)
-  | '+' :: tail -> { kind = PLUS;  text = "+"; lit_val = "null" } :: tokenize tail
-  | '*' :: tail -> { kind = STAR;  text = "*"; lit_val = "null" } :: tokenize tail
-  | '/' :: tail -> { kind = SLASH; text = "/"; lit_val = "null" } :: tokenize tail
+  | '+' :: tail -> { kind = PLUS;  text = "+old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '*' :: tail -> { kind = STAR;  text = "*old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '/' :: tail -> { kind = SLASH; text = "/old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+1)
   (* ── multi-char operators ── *)
-  | '-' :: '>' :: tail -> { kind = ARROW;  text = "->"; lit_val = "null" } :: tokenize tail
-  | '-' :: tail        -> { kind = MINUS;  text = "-";  lit_val = "null" } :: tokenize tail
-  | '=' :: '=' :: tail -> { kind = EQ;     text = "=="; lit_val = "null" } :: tokenize tail
-  | '=' :: tail        -> { kind = ASSIGN; text = "=";  lit_val = "null" } :: tokenize tail
-  | '!' :: '=' :: tail -> { kind = NEQ;    text = "!="; lit_val = "null" } :: tokenize tail
-  | '<' :: '=' :: tail -> { kind = LEQ;    text = "<="; lit_val = "null" } :: tokenize tail
-  | '<' :: tail        -> { kind = LESS;   text = "<";  lit_val = "null" } :: tokenize tail
-  | '>' :: '=' :: tail -> { kind = GEQ;    text = ">="; lit_val = "null" } :: tokenize tail
-  | '>' :: tail        -> { kind = MORE;   text = ">";  lit_val = "null" } :: tokenize tail
+  | '-' :: '>' :: tail -> { kind = ARROW;  text = "->old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+2)
+  | '-' :: tail -> { kind = MINUS;  text = "-";  lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '=' :: '=' :: tail -> { kind = EQ;     text = "==old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+2)
+  | '=' :: tail -> { kind = ASSIGN; text = "=";  lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '!' :: '=' :: tail -> { kind = NEQ;    text = "!=old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+2)
+  | '<' :: '=' :: tail -> { kind = LEQ;    text = "<=old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+2)
+  | '<' :: tail -> { kind = LESS;   text = "<";  lit_val = "null"; line; col } :: tokenize tail line (col+1)
+  | '>' :: '=' :: tail -> { kind = GEQ;    text = ">=old_line"; lit_val = "null"; line; col } :: tokenize tail line (col+2)
+  | '>' :: tail -> { kind = MORE;   text = ">";  lit_val = "null"; line; col } :: tokenize tail line (col+1)
   (* ── string literal ── *)
-  | '"' :: tail ->
-      let (str, tail2) = read_string "" tail in
-      { kind = STR; text = "\"" ^ str ^ "\""; lit_val = str } :: tokenize tail2
+  | '"' :: tail -> let old_line = line and old_col = col in
+      let (str, tail2, new_line, new_col) = read_string "" tail line (col + 1) in
+      { kind = STR; text = "\"" ^ str ^ "\""; lit_val = str; line = old_line; col = old_col } :: tokenize tail2 new_line new_col
   (* ── integer literal ── *)
-  | ('0'..'9') as d :: tail ->
-      let (num, tail2) = read_number (String.make 1 d) tail in
-      { kind = INT; text = num; lit_val = num } :: tokenize tail2
-  (* ── identifier or keyword ── *)
-  | ('a'..'z' | 'A'..'Z' | '_') as c :: tail ->
-      let (str, tail2) = read_identifier_or_keyword (String.make 1 c) tail in
-      let keyword = str_to_kind str in
-      { kind = keyword; text = str; lit_val = "null" } :: tokenize tail2
-  (* ── anything else is a lexer error ── *)
-  | c :: _ ->
-      failwith (Printf.sprintf "Lexer error: unexpected character '%c'" c)
+  | ('0'..'9') as d :: tail1 ->
+      let old_line = line and old_col = col in
+      let (num, tail2, new_line, new_col) = read_number (String.make 1 d) tail1 line (col + 1) in
+      { kind = INT; text = num; lit_val = num; line = old_line; col = old_col }
+      :: tokenize tail2 new_line new_col
 
+  | ('a'..'z' | 'A'..'Z' | '_') as ch :: tail1 ->
+      let old_line = line and old_col = col in
+      let (word, tail2, new_line, new_col) = read_identifier_or_keyword (String.make 1 ch) tail1 line (col + 1) in
+      let k = str_to_kind word in
+      { kind = k; text = word; lit_val = "null"; line = old_line; col = old_col }
+      :: tokenize tail2 new_line new_col
+
+  | c :: _ ->
+      failwith (Printf.sprintf "Lexer error at line %d, col %d: unexpected character '%c'" line col c)
+
+let tokenize chars = tokenize chars 1 1
 (* ── Print tokens as string (called from main.ml) ── *)
 let rec print_tokens tok_list =
   match tok_list with
   | [] -> ""
-  | { kind; text; lit_val } :: tail ->
-      let kind_to_str = match kind with
+  | { kind; text; lit_val; line;col } :: tail -> let kind_to_str = match kind with
       (* ── Control keywords ── *)  
       | VAR -> "VAR" | FN -> "FN" | RETURN -> "RETURN" | IF -> "IF" | ELSE -> "ELSE"| WHILE -> "WHILE" | FOR -> "FOR" | IN -> "IN" | BREAK -> "BREAK" | CONTINUE -> "CONTINUE"
       (* ── Automaton construction ── *)
@@ -190,4 +201,4 @@ let rec print_tokens tok_list =
       (* ── THIS IS THE END ── *)
       | END -> "END"
       in
-      kind_to_str ^ " " ^ text ^ " " ^ lit_val ^ "\n" ^ print_tokens tail
+      kind_to_str ^ " " ^ text ^ " " ^ lit_val^ " (line " ^ string_of_int line ^ ", col " ^ string_of_int col ^ ")"^ "\n" ^ print_tokens tail
