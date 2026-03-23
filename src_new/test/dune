@@ -1,3 +1,0 @@
-(test
- (name test_automataGEN)
- (libraries src_new ounit2))

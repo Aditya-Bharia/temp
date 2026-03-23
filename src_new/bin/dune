@@ -1,4 +1,0 @@
-(executable
- (public_name src_new)
- (name main)
- (libraries src_new))
