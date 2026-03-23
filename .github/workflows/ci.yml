@@ -18,13 +18,25 @@ jobs:
           pip install -r requirements.txt
       - name: Run Python tests
         run: pytest -q python/test_automata.py
-
   ocaml-build:
+
     runs-on: ubuntu-latest
+
     steps:
+
       - uses: actions/checkout@v4
-      - uses: ocaml/setup-ocaml@v3
+
+      - name: Setup OCaml
+        uses: ocaml/setup-ocaml@v3
         with:
-          ocaml-compiler: 5.1.1
+          ocaml-compiler: 4.14.1
+          dune-cache: true
+
+      - name: Install dependencies
+        run: opam install dune ounit2 ocamlformat --yes
+
       - name: Build
-        run: dune build
+        run: opam exec -- dune build
+
+      - name: Run tests
+        run: opam exec -- dune runtest
