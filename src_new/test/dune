@@ -1,3 +1,19 @@
 (test
- (name test_src_new)
- (libraries src_new ounit2))
+ (name test_tokenizer)
+ (libraries automatagen_dsl ounit2))
+
+(test
+ (name test_parser)
+ (libraries automatagen_dsl ounit2))
+
+(test
+ (name test_validator)
+ (libraries automatagen_dsl ounit2))
+
+(test
+ (name test_interpreter)
+ (libraries automatagen_dsl ounit2))
+
+(test
+ (name test_integration)
+ (libraries automatagen_dsl ounit2))
