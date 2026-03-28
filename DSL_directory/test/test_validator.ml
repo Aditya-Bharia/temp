@@ -5,3 +5,4 @@ let () =
   match Validator.validate_automaton a with
   | Ok () -> print_endline "validator test passed"
   | Error e -> failwith e
+;;

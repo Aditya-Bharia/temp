@@ -5,3 +5,4 @@ let () =
   match List.hd tokens with
   | Token.Automaton -> print_endline "tokenizer test passed"
   | _ -> failwith "tokenizer test failed"
+;;

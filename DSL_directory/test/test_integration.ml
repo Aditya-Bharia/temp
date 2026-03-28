@@ -1,2 +1,1 @@
-let () =
-  print_endline "integration test scaffold"
+let () = print_endline "integration test scaffold"
