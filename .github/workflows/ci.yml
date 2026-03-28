@@ -24,7 +24,7 @@ jobs:
 
     defaults:
      run:
-      working-directory: src_new
+      working-directory: DSL_directory
 
     steps:
 
@@ -37,10 +37,16 @@ jobs:
           dune-cache: true
 
       - name: Install dependencies
-        run: opam install dune ounit2 ocamlformat --yes
+        run: opam install dune ounit2 ocamlformat zanuda --yes
 
       - name: Build
         run: opam exec -- dune build
 
       - name: Run tests
         run: opam exec -- dune runtest
+      
+      - name: Check formatting
+        run: opam exec -- dune build @fmt
+
+      - name: Run linter
+        run: opam exec -- zanuda -dir .
