@@ -150,7 +150,7 @@ type stmt =
   | Export    of expr * string
 
   | Append    of expr * expr
-  | Remove    of expr * int   
+  | Remove    of expr * expr 
 
   (* any expression written as a standalone statement *)
   | ExprStmt  of expr
