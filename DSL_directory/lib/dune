@@ -1,7 +1,16 @@
 (library
- (name dsl_directory)
- (modules ast my_utils))
-
-(library
  (name tokenizer)
  (modules tokenizer))
+
+(library
+ (name my_utils)
+ (modules my_utils))
+
+(library
+ (name ast)
+ (modules ast))
+
+(library
+ (name dsl_directory)
+ (modules codegen)
+ (libraries tokenizer my_utils ast))

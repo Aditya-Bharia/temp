@@ -97,6 +97,23 @@ END  null (line 1, col 21)
   in
   assert_equal ~printer expected (tok "var x = 10 # comment")
 
+let test_complex_dsl _ =
+  let expected =
+"NFA NFA null (line 1, col 1)
+LEFT_CURL { null (line 1, col 5)
+STATES states null (line 1, col 7)
+LEFT_CURL { null (line 1, col 14)
+IDF q0 null (line 1, col 15)
+COMMA , null (line 1, col 17)
+IDF q1 null (line 1, col 18)
+RIGHT_CURL } null (line 1, col 20)
+RIGHT_CURL } null (line 1, col 22)
+END  null (line 1, col 23)
+"
+  in
+  assert_equal ~printer expected
+    (tok "NFA { states {q0,q1} }")
+
 (* -------- SUITE -------- *)
 
 let suite =
@@ -109,6 +126,7 @@ let suite =
     "comparison" >:: test_comparison;
     "dsl keywords" >:: test_dsl_keywords;
     "comment" >:: test_comment;
+    "complex dsl" >:: test_complex_dsl;
   ]
 
 let () =

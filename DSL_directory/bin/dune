@@ -1,4 +1,4 @@
 (executable
  (public_name dsl_directory)
  (name main)
- (libraries dsl_directory))
+ (libraries tokenizer my_utils ast))
