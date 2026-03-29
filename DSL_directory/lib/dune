@@ -1,2 +1,7 @@
 (library
- (name dsl_directory))
+ (name dsl_directory)
+ (modules ast my_utils))
+
+(library
+ (name tokenizer)
+ (modules tokenizer))
