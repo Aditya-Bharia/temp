@@ -1,136 +1,173 @@
-(* ===================================================
-   PART 1 : binary operators
-   =================================================== *)
+(* ast.ml — Abstract Syntax Tree for AutomataGen DSL *)
 
-type bin_op =
-  | Add
-  | Sub
-  | Mul
-  | Div
-  | Eq
-  | Neq
-  | Lt
-  | Gt
-  | Leq
-  | Geq
-  | And
-  | Or
+(* ── Source position ─────────────────────────────────────────────────────── *)
+(* Every node that can produce a name-resolution error carries a pos so
+   check.ml can report the exact line and column. *)
 
-(* ===================================================
-   PART 2 : expressions
-   =================================================== *)
+type pos = { line : int; col : int }
+
+let dummy_pos = { line = 0; col = 0 }
+
+(* ── Operators ───────────────────────────────────────────────────────────── *)
+
+type binop =
+  | Add | Sub | Mul | Div          (* arithmetic        *)
+  | Eq  | Neq                      (* equality          *)
+  | Lt  | Gt  | Leq | Geq          (* comparison        *)
+  | And_placeholder                 (* logical and       *)
+  | Or_placeholder                  (* logical or        *)
+
+type unop =
+  | Neg   (* unary minus  *)
+  | Not   (* logical not  *)
+
+(* ── Automaton kind ──────────────────────────────────────────────────────── *)
+
+type automaton_kind = NFA | DFA
+
+(* ── Expressions ─────────────────────────────────────────────────────────── *)
 
 type expr =
-  (* basic values *)
-  | Num of int
-  | Str of string
-  | Bool of bool
-  | Var of string
-  (* operators *)
-  | BinOp of bin_op * expr * expr
-  | NotOp of expr
-  | Neg of expr
-  (* assignment is an expression: x = expr *)
-  | Assign of string * expr
-  (* user defined function call *)
-  | Call of string * expr list
-  (* list literal and index access *)
-  | List of expr list
-  | Index of expr * expr (* expr[expr] *)
-  (* language operations *)
-  | Union of expr * expr
-  | Intersection of expr * expr
-  | Difference of expr * expr
-  | Complement of expr
-  | ConcatLang of expr * expr
-  | KleeneStar of expr
-  | KleenePlus of expr
-  | ReverseLang of expr
-  (* transformations *)
-  | Determinize of expr
-  | Minimize of expr
-  | RegexToNfa of expr
-  | NfaToRegex of expr
-  | DfaToRegex of expr
-  (* analysis functions, all args are expr now *)
-  | Accepts of expr * expr
-  | Trace of expr * expr
-  | Equivalent of expr * expr
-  | RegexEquivalent of expr * expr
-  | Validate of expr
-  | Subset of expr * expr
-  | IsEmpty of expr
-  | IsFinite of expr
-  | IsMinimal of expr
-  | IsDeterministic of expr
-  | Reachable of expr
-  | DeadStates of expr
-  (* string operations *)
-  | StrReverse of expr
-  | StrConcat of expr * expr
-  | Chars of expr
-  | RandomStr of expr * expr
-  (* import returns a value so it lives in expr *)
-  | Import of string
+  (* ── Literals ── *)
+  | IntLit    of int                          (* 42              *)
+  | StrLit    of string                       (* "hello"         *)
+  | BoolLit   of bool                         (* true / false    *)
+  | ListLit   of expr list                    (* [ e1, e2, ... ] *)
 
-(* ===================================================
-   PART 3 : automaton body
-   =================================================== *)
+  (* ── Names ── *)
+  | Var       of string * pos                 (* x               *)
 
-(* one transition entry inside the transition block *)
-type transition_rule =
-  { from_s : string
-  ; symbol : string option (* None for epsilon *)
-  ; to_s : string
-  }
+  (* ── Operators ── *)
+  | Binop     of binop * expr * expr          (* a + b           *)
+  | Unop      of unop  * expr                 (* -x  /  not b    *)
 
-(* transition block holds all rules together as a list *)
-type automaton_body_item =
-  | States of string list
-  | Alphabet of string list
-  | StartState of string
-  | FinalState of string list
-  | Transitions of transition_rule list
+  (* ── Assignment (expression-level) ── *)
+  | Assign    of string * expr * pos          (* x = expr        *)
 
-type automaton_type =
-  | NFA
-  | DFA
+  (* ── Index and call ── *)
+  | Index     of expr * expr                  (* xs[i]           *)
+  | Call      of expr * expr list             (* f(a, b)         *)
 
-type automaton_def =
-  { auto_type : automaton_type
-  ; auto_name : string
-  ; body : automaton_body_item list
-  }
+  (* ── Import ── *)
+  | Import    of string * pos                 (* import("m.json")*)
 
-(* ===================================================
-   PART 4 : statements
-   =================================================== *)
+  (* ── Language operations (return a new automaton) ── *)
+  | Union         of expr * expr              (* union(A, B)     *)
+  | Intersection  of expr * expr              (* intersection(A,B)*)
+  | Difference    of expr * expr              (* difference(A,B) *)
+  | Complement    of expr * pos               (* complement(A)   *)
+  | ConcatLang    of expr * expr              (* concat_lang(A,B)*)
+  | KleeneStar    of expr                     (* kleene_star(A)  *)
+  | KleenePlus    of expr                     (* kleene_plus(A)  *)
+  | ReverseLang   of expr                     (* reverse_lang(A) *)
+
+  (* ── Transformations (return an automaton) ── *)
+  | Determinize   of expr                     (* determinize(M)  *)
+  | Minimize      of expr                     (* minimize(M)     *)
+  | RegexToNfa    of expr                     (* regex_to_nfa(r) *)
+  | NfaToRegex    of expr                     (* nfa_to_regex(M) *)
+  | DfaToRegex    of expr * pos               (* dfa_to_regex(D) *)
+
+  (* ── Analysis (return bool / string / list) ── *)
+  | Accepts       of expr * expr              (* accepts(M, s)   *)
+  | Trace         of expr * expr              (* trace(M, s)     *)
+  | Equivalent    of expr * expr              (* equivalent(A,B) *)
+  | RegexEquiv    of expr * expr              (* regex_equivalent*)
+  | Validate      of expr                     (* validate(M)     *)
+  | Subset        of expr * expr              (* subset(A, B)    *)
+  | IsEmpty       of expr                     (* is_empty(A)     *)
+  | IsFinite      of expr                     (* is_finite(A)    *)
+  | IsMinimal     of expr * pos               (* is_minimal(D)   *)
+  | IsDeterministic of expr                   (* is_deterministic*)
+  | Reachable     of expr                     (* reachable(A)    *)
+  | DeadStates    of expr                     (* dead_states(A)  *)
+
+  (* ── String operations ── *)
+  | Reverse       of expr                     (* reverse(s)      *)
+  | ConcatStr     of expr * expr              (* concat(s1, s2)  *)
+  | Chars         of expr                     (* chars(s)        *)
+  | RandomStr     of expr * expr              (* random_str(n,ab)*)
+
+(* ── Transition entry inside an automaton body ──────────────────────────── *)
+
+type symbol =
+  | Sym of string    (* a named symbol from the alphabet *)
+  | Eps              (* epsilon transition               *)
+
+type trans_entry = {
+  from_state : string;
+  on_symbol  : symbol;
+  to_state   : string;
+  pos        : pos;
+}
+
+(* ── Automaton body ──────────────────────────────────────────────────────── *)
+
+type automaton_body = {
+  kind         : automaton_kind;
+  name         : string;
+  states       : string list;
+  alphabet     : string list;
+  start        : string;
+  final_states : string list;
+  transitions  : trans_entry list;
+  pos          : pos;     (* position of the NFA/DFA keyword *)
+}
+
+(* ── Statements ──────────────────────────────────────────────────────────── *)
 
 type stmt =
-  | VarDecl of string * expr
-  | FnDecl of string * string list * stmt list
-  | AutoDecl of automaton_def
-  (* else list is empty when there is no else branch *)
-  | If of expr * stmt list * stmt list
-  | While of expr * stmt list
-  | For of string * expr * stmt list
-  | Break
-  | Continue
-  (* return expr? -- expr is optional, None means bare return *)
-  | Return of expr option
-  | Print of expr
-  | Visualize of expr
-  | Table of expr
-  | Stats of expr
-  | Export of expr * string
-  | Append of expr * expr
-  | Remove of expr * expr
-  (* any expression written as a standalone statement *)
-  | ExprStmt of expr
+  | VarDecl     of string * expr * pos
+  (* var x = expr *)
 
-(* ===================================================
-   PART 5 : program
-   a program is just a flat list of statements
-   =================================================== *)
+  | FnDecl      of string * string list * stmt list * pos
+  (* fn name(p1, p2) { body } *)
+
+  | AutomatonDecl of automaton_body
+  (* NFA M { ... }  /  DFA D { ... } *)
+
+  | If          of expr * stmt list * stmt list option * pos
+  (* if cond { then_body } (else { else_body })? *)
+
+  | While       of expr * stmt list * pos
+  (* while cond { body } *)
+
+  | For         of string * expr * stmt list * pos
+  (* for x in iterable { body } *)
+
+  | Return      of expr option * pos
+  (* return expr? *)
+
+  | Break       of pos
+  (* break *)
+
+  | Continue    of pos
+  (* continue *)
+
+  | Print       of expr * pos
+  (* print(expr) *)
+
+  | Visualize   of expr * pos
+  (* visualize(expr) *)
+
+  | Table       of expr * pos
+  (* table(expr) *)
+
+  | Stats       of expr * pos
+  (* stats(expr) *)
+
+  | Export      of expr * string * pos
+  (* export(M, "file.png") *)
+
+  | Append      of expr * expr * pos
+  (* append(xs, v) *)
+
+  | Remove      of expr * expr * pos
+  (* remove(xs, i) *)
+
+  | ExprStmt    of expr
+  (* bare expression used as a statement, e.g. a function call *)
+
+(* ── Top-level program ───────────────────────────────────────────────────── *)
 
 type program = stmt list
