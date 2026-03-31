@@ -23,4 +23,4 @@
 (library
  (name dsl_directory)
  (modules dsl_directory)
- (libraries tokenizer my_utils ast parser))
+ (libraries tokenizer my_utils ast check parser))
