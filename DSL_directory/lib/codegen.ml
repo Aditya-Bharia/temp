@@ -1,11 +1,10 @@
 open Ast
-
 (* helpers *)
 (* indent depth  →  "    " repeated depth times (4 spaces per level) *)
 let indent (depth : int) : string = String.make (depth * 4) ' '
 
 (* wrap a string in double quotes and escape any special characters.
-   e.g.  hello "world"  →  "hello \"world\""                        *)
+   e.g.  hello "world"  →  "hello \"world\""                       *)
 let quoted (s : string) : string = Printf.sprintf "\"%s\"" (String.escaped s)
 
 (* emit a Python list of quoted strings.
@@ -20,11 +19,12 @@ let py_expr_list (items : string list) : string = "[" ^ String.concat ", " items
 let rec emit_expr (e : expr) : string =
   match e with
   (* literals *)
-  | Num n -> string_of_int n
-  | Str s -> quoted s
-  | Bool b -> if b then "True" else "False"
+  | IntLit n -> string_of_int n
+  | StrLit s -> quoted s
+  | BoolLit b -> if b then "True" else "False"
   (* variable reference *)
-  | Var x -> x
+  (* Var now carries a pos; we ignore it in codegen *)
+  | Var (x, _pos) -> x
   (* binary operators *)
   | BinOp (op, left, right) ->
     let l = emit_expr left in
@@ -41,21 +41,21 @@ let rec emit_expr (e : expr) : string =
       | Gt -> ">"
       | Leq -> "<="
       | Geq -> ">="
-      | And -> "and"
-      | Or -> "or"
+      | And_placeholder -> "and"
+      | Or_placeholder -> "or"
     in
     Printf.sprintf "(%s %s %s)" l op_str r
   (* unary operators *)
-  | NotOp e -> Printf.sprintf "(not %s)" (emit_expr e)
-  | Neg e -> Printf.sprintf "(-%s)" (emit_expr e)
+  | Unop (Noy, e) -> Printf.sprintf "(not %s)" (emit_expr e)
+  | Unop (Neg, e) -> Printf.sprintf "(-%s)" (emit_expr e)
   (* assignment expression: emit the Python 3.8+ walrus operator  (x := v). *)
-  | Assign (x, e) -> Printf.sprintf "(%s := %s)" x (emit_expr e)
+  | Assign (x, e, _pos) -> Printf.sprintf "(%s := %s)" x (emit_expr e)
   (* user defined function call *)
-  | Call (fname, args) ->
+  | Call (callee, args) ->
     let arg_strs = List.map emit_expr args in
-    Printf.sprintf "%s(%s)" fname (String.concat ", " arg_strs)
+    Printf.sprintf "%s(%s)" (emit_expr callee) (String.concat ", " arg_strs)
   (* list literal *)
-  | List elems -> py_expr_list (List.map emit_expr elems)
+  | ListLit elems -> py_expr_list (List.map emit_expr elems)
   (* index access *)
   | Index (collection, idx) ->
     Printf.sprintf "%s[%s]" (emit_expr collection) (emit_expr idx)
@@ -64,7 +64,7 @@ let rec emit_expr (e : expr) : string =
   | Intersection (a, b) ->
     Printf.sprintf "intersection(%s, %s)" (emit_expr a) (emit_expr b)
   | Difference (a, b) -> Printf.sprintf "difference(%s, %s)" (emit_expr a) (emit_expr b)
-  | Complement a -> Printf.sprintf "complement(%s)" (emit_expr a)
+  | Complement (a, _pos) -> Printf.sprintf "complement(%s)" (emit_expr a)
   | ConcatLang (a, b) -> Printf.sprintf "concat_lang(%s, %s)" (emit_expr a) (emit_expr b)
   | KleeneStar a -> Printf.sprintf "kleene_star(%s)" (emit_expr a)
   | KleenePlus a -> Printf.sprintf "kleene_plus(%s)" (emit_expr a)
@@ -74,18 +74,18 @@ let rec emit_expr (e : expr) : string =
   | Minimize a -> Printf.sprintf "minimize(%s)" (emit_expr a)
   | RegexToNfa a -> Printf.sprintf "regex_to_nfa(%s)" (emit_expr a)
   | NfaToRegex a -> Printf.sprintf "nfa_to_regex(%s)" (emit_expr a)
-  | DfaToRegex a -> Printf.sprintf "dfa_to_regex(%s)" (emit_expr a)
+  | DfaToRegex (a, _pos) -> Printf.sprintf "dfa_to_regex(%s)" (emit_expr a)
   (*analysis functions*)
   | Accepts (m, s) -> Printf.sprintf "accepts(%s, %s)" (emit_expr m) (emit_expr s)
   | Trace (m, s) -> Printf.sprintf "trace(%s, %s)" (emit_expr m) (emit_expr s)
   | Equivalent (a, b) -> Printf.sprintf "equivalent(%s, %s)" (emit_expr a) (emit_expr b)
-  | RegexEquivalent (a, b) ->
+  | RegexEquiv (a, b) ->
     Printf.sprintf "regex_equivalent(%s, %s)" (emit_expr a) (emit_expr b)
   | Validate a -> Printf.sprintf "validate(%s)" (emit_expr a)
   | Subset (a, b) -> Printf.sprintf "subset(%s, %s)" (emit_expr a) (emit_expr b)
   | IsEmpty a -> Printf.sprintf "is_empty(%s)" (emit_expr a)
   | IsFinite a -> Printf.sprintf "is_finite(%s)" (emit_expr a)
-  | IsMinimal a -> Printf.sprintf "is_minimal(%s)" (emit_expr a)
+  | IsMinimal (a, _pos) -> Printf.sprintf "is_minimal(%s)" (emit_expr a)
   | IsDeterministic a -> Printf.sprintf "is_deterministic(%s)" (emit_expr a)
   | Reachable a -> Printf.sprintf "reachable(%s)" (emit_expr a)
   | DeadStates a -> Printf.sprintf "dead_states(%s)" (emit_expr a)
