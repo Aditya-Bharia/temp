@@ -21,6 +21,11 @@
  (libraries ast parser))
 
 (library
+ (name codegen)
+ (modules codegen)
+ (libraries ast))
+
+(library
  (name dsl_directory)
  (modules dsl_directory)
  (libraries tokenizer my_utils ast check parser))
