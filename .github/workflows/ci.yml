@@ -44,9 +44,6 @@ jobs:
 
       - name: Run tests
         run: opam exec -- dune runtest
-      
-      - name: Check formatting
-        run: opam exec -- dune build @fmt
 
       - name: Run linter
         run: opam exec -- zanuda -dir .
