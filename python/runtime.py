@@ -3,7 +3,11 @@ import os
 import random
 import subprocess
 from collections import defaultdict, deque
-from graphviz import Digraph   # pip install graphviz is required for this to work
+
+try:
+    from graphviz import Digraph  # pip install graphviz is required for visualize
+except ModuleNotFoundError:
+    Digraph = None
 
 __all__ = [
     'NFA', 'DFA', 'Automaton',
@@ -864,7 +868,12 @@ def dsl_print(val) -> None:
     else:
         print(val)
 
-def visualize(A, filename="automaton", fmt="png", view=True) -> None:
+def visualize(A, filename="automaton", fmt="png", view=False) -> None:
+    if Digraph is None:
+        raise ModuleNotFoundError(
+            "graphviz Python package is required for visualize(). "
+            "Install with: pip install graphviz"
+        )
     m    = _get_machine(A)
     name = A.name if isinstance(A, Automaton) else "automaton"
     dot  = Digraph(graph_attr={"rankdir": "LR"})
