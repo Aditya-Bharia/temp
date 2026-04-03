@@ -17,3 +17,8 @@
  (name test_check)
  (modules test_check)
  (libraries check parser tokenizer ast ounit2))
+
+(test
+ (name test_codegen)
+ (modules test_codegen)
+ (libraries codegen tokenizer ast ounit2))
