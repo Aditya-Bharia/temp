@@ -304,7 +304,10 @@ let rec check_expr (env: env) (expr: expr) : error list =
   | Accepts (a, b) ->
       require_ref a @ check_expr env b
 
-  | Trace (a, b) | Equivalent (a, b) | Subset (a, b) ->
+    | Trace (a, b) ->
+      require_ref a @ check_expr env b
+
+    | Equivalent (a, b) | Subset (a, b) ->
       require_ref a @ require_ref b
 
   | RegexEquiv (a, b) ->
