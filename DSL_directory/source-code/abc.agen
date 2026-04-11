@@ -79,6 +79,7 @@ visualize(D2)
 table(D)
 stats(M)
 export(D2, "dfa_out.dot")
+export(D2, "dfa_out.json")
 var loaded    = import("dfa_out.json")
 
 /* Step 9: List operations – var, append, remove */
