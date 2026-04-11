@@ -106,30 +106,6 @@ let check_new_name name pos env =
     | Some IsNFA | Some IsDFA -> [DuplicateAutomaton (name, pos)]
     | None -> []
 
-let collect_decls (prog : program) : env * error list =
-  List.fold_left (fun (env, errs) stmt ->
-    match stmt with
- 
-    | VarDecl (name, _, p) ->
-        let e  = check_new_name name p env in
-        let env' = { env with names = env.names @ [(name, IsVar)] } in
-        (env', errs @ e)
- 
-    | FnDecl (name, _, _, p) ->
-        let e  = check_new_name name p env in
-        let env' = { env with names = env.names @ [(name, IsFn)] } in
-        (env', errs @ e)
- 
-    | AutomatonDecl body ->
-        let kind = if body.kind = NFA then IsNFA else IsDFA in
-        let e    = check_new_name body.name body.pos env in
-        let env' = { env with names = env.names @ [(body.name, kind)] } in
-        (env', errs @ e)
- 
-    | _ -> (env, errs)
- 
-  ) (empty_env, []) prog
-
 
 let check_automaton_body (body: automaton_body) : error list = 
   let m = body.name in 
@@ -211,12 +187,13 @@ let name_of_arg = function
   | Var (name, _) -> name
   | _             -> "argument"
 
-let require_automaton_ref = function
-  | Var _ -> []
-  | _ -> [UnknownVariable ("<automaton>", dummy_pos)]
+let require_automaton_ref_with_env check_expr_fn env= function
+  | Var _ as e -> check_expr_fn env e
+  | e -> check_expr_fn env e
 
 
 let rec check_expr (env: env) (expr: expr) : error list = 
+  let require_ref e = require_automaton_ref_with_env check_expr env e in 
   match expr with 
 
   | IntLit _ | StrLit _ | BoolLit _ -> []
@@ -252,16 +229,11 @@ let rec check_expr (env: env) (expr: expr) : error list =
  
   | Import _ -> []
 
-    | Union (a, b) | Intersection (a, b) | Difference (a, b) | ConcatLang (a, b) ->
-      require_automaton_ref a @ require_automaton_ref b
+  | Union (a, b) | Intersection (a, b) | Difference (a, b) | ConcatLang (a, b) ->
+      require_ref a @ require_ref b
 
-  | Complement (a, p) ->
-      let type_err =
-        match kind_of_arg env a with
-        | Some NFA -> [FunctionRequiresDFA (name_of_arg a, p)]
-        | _        -> []
-      in
-      type_err @ require_automaton_ref a
+  | Complement (a, _) ->
+    require_ref a
 
   | DfaToRegex (a, p) ->
       let type_err =
@@ -284,10 +256,10 @@ let rec check_expr (env: env) (expr: expr) : error list =
   | Determinize a | Minimize a | RegexToNfa a | NfaToRegex a -> check_expr env a
 
       | Accepts (a, b) ->
-      require_automaton_ref a @ check_expr env b
+      require_ref a @ check_expr env b
 
       | Trace (a, b) | Equivalent (a, b) | Subset (a, b) ->
-        require_automaton_ref a @ require_automaton_ref b
+        require_ref a @ require_ref b
 
     | RegexEquiv (a, b) ->
       check_expr env a @ check_expr env b
@@ -298,31 +270,47 @@ let rec check_expr (env: env) (expr: expr) : error list =
   | Reverse a | Chars a -> check_expr env a
   | ConcatStr (a, b) | RandomStr (a, b) -> check_expr env a @ check_expr env b
 
-and check_stmt (env : env) (stmt : stmt) : error list =
+and check_stmt (env : env) (stmt : stmt) : env * error list =
   match stmt with
  
-  | VarDecl (_, init, _) ->
-      check_expr env init
+  | VarDecl (name, init, p) ->
+      let errs = check_expr env init in
+      let e = check_new_name name p env in
+      let env' = if e = [] then { env with names = env.names @ [(name,IsVar)] } else env in 
+      (env',errs @ e)
+      
  
-  | FnDecl (_, params, body, _) ->
+  | FnDecl (name , params, body, p) ->
       let inner =
-        { names   = env.names @ List.map (fun p -> (p, IsVar)) params;
+        { names   = env.names @ List.map (fun par -> (par, IsVar)) params;
           in_fn   = true;
           in_loop = false }
       in
-      check_stmts inner body
+      let (_, body_errs) = check_stmts inner body in
+      let e = check_new_name name p env in 
+      let env' = if e = [] then { env with names = env.names @ [(name,IsFn)] } else env in
+      (env',e @ body_errs)
  
   | AutomatonDecl body ->
-      check_automaton_body body
+      let kind = if body.kind = NFA then IsNFA else IsDFA in
+      let e = check_new_name body.name body.pos env in
+      let env' = if e = [] then { env with names = env.names @ [(body.name,kind)] } else env in 
+      (env', e @ check_automaton_body body)
  
   | If (cond, then_b, else_b, _) ->
-      check_expr env cond
-      @ check_stmts env then_b
-      @ (match else_b with None -> [] | Some b -> check_stmts env b)
+      let errs =
+        check_expr env cond
+        @ snd (check_stmts env then_b)
+        @ (match else_b with None -> [] | Some b -> snd (check_stmts env b))
+      in
+      (env, errs)
  
   | While (cond, body, _) ->
-      check_expr env cond
-      @ check_stmts { env with in_loop = true } body
+      let errs =
+        check_expr env cond
+        @ snd (check_stmts { env with in_loop = true } body)
+      in
+      (env, errs)
  
   | For (var, iter, body, p) ->
       let shadow = if is_declared var env then [ForVarShadowsOuter (var, p)] else [] in
@@ -331,27 +319,29 @@ and check_stmt (env : env) (stmt : stmt) : error list =
           names   = env.names @ [(var, IsVar)];
           in_loop = true }
       in
-      shadow @ check_expr env iter @ check_stmts inner body
+      (env, shadow @ check_expr env iter @ snd (check_stmts inner body))
  
   | Return (expr_opt, p) ->
       let scope = if not env.in_fn then [ReturnOutsideFunction p] else [] in
-      scope @ (match expr_opt with None -> [] | Some e -> check_expr env e)
+      (env, scope @ (match expr_opt with None -> [] | Some e -> check_expr env e))
  
-  | Break p    -> if not env.in_loop then [BreakOutsideLoop p]    else []
-  | Continue p -> if not env.in_loop then [ContinueOutsideLoop p] else []
+  | Break p    -> (env, if not env.in_loop then [BreakOutsideLoop p]    else [])
+  | Continue p -> (env, if not env.in_loop then [ContinueOutsideLoop p] else [])
  
-  | Print     (e, _)    -> check_expr env e
-  | Visualize (e, _)    -> check_expr env e
-  | Table     (e, _)    -> check_expr env e
-  | Stats     (e, _)    -> check_expr env e
-  | Export    (e, _, _) -> check_expr env e
-  | Append    (xs, v, _) -> check_expr env xs @ check_expr env v
-  | Remove    (xs, i, _) -> check_expr env xs @ check_expr env i
-  | ExprStmt  e -> check_expr env e
+  | Print     (e, _)    -> (env,check_expr env e)
+  | Visualize (e, _)    -> (env, check_expr env e)
+  | Table     (e, _)    -> (env, check_expr env e)
+  | Stats     (e, _)    -> (env, check_expr env e)
+  | Export    (e, _, _) -> (env, check_expr env e)
+  | Append    (xs, v, _) -> (env, check_expr env xs @ check_expr env v)
+  | Remove    (xs, i, _) -> (env, check_expr env xs @ check_expr env i)
+  | ExprStmt  e -> (env, check_expr env e)
  
 and check_stmts env stmts =
-  List.concat_map (check_stmt env) stmts
- 
+  List.fold_left (fun (env_acc, errs_acc) stmt ->
+    let (env', errs) = check_stmt env_acc stmt in
+    (env', errs_acc @ errs)
+  ) (env, []) stmts
 
 type result =
   | Ok
@@ -359,11 +349,7 @@ type result =
  
 let check (prog : program) : result =
 
-  let (env, decl_errors) = collect_decls prog in
- 
-  let use_errors = check_stmts env prog in
- 
-  let all_errors = decl_errors @ use_errors in
+  let (_,all_errors) = check_stmts empty_env prog in
  
   let seen = Hashtbl.create 32 in
   let unique = List.filter (fun e ->
