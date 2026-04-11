@@ -81,6 +81,7 @@ type expr =
   | IsDeterministic of expr                   (* is_deterministic*)
   | Reachable     of expr                     (* reachable(A)    *)
   | DeadStates    of expr                     (* dead_states(A)  *)
+  | AnimateTrace  of expr * expr              (* animate_trace(M, s) *)
 
   (* ── String operations ── *)
   | Reverse       of expr                     (* reverse(s)      *)

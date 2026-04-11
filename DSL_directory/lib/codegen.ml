@@ -86,6 +86,7 @@ let rec emit_expr (e : expr) : string =
   | IsDeterministic a -> Printf.sprintf "is_deterministic(%s)" (emit_expr a)
   | Reachable a -> Printf.sprintf "reachable(%s)" (emit_expr a)
   | DeadStates a -> Printf.sprintf "dead_states(%s)" (emit_expr a)
+  | AnimateTrace (m, s) -> Printf.sprintf "animate_trace(%s, %s)" (emit_expr m) (emit_expr s)
   (*string operations*)
   | Reverse a -> Printf.sprintf "str_reverse(%s)" (emit_expr a)
   | ConcatStr (a, b) -> Printf.sprintf "str_concat(%s, %s)" (emit_expr a) (emit_expr b)

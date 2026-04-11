@@ -161,8 +161,9 @@ let () =
     ; "is_deterministic", IS_DETERMINISTIC
     ; "reachable", REACHABLE
     ; "dead_states", DEAD_STATES
-    ; (* ── I/O and export/ import ── *)
-      "print", PRINT
+    ; "animate_trace", ANIMATE_TRACE
+    (* ── I/O and export/ import ── *)
+    ; "print", PRINT
     ; "visualize", VISUALIZE
     ; "table", TABLE
     ; "stats", STATS
@@ -406,6 +407,7 @@ let rec print_tokens tok_list =
       | IS_DETERMINISTIC -> "IS_DETERMINISTIC"
       | REACHABLE -> "REACHABLE"
       | DEAD_STATES -> "DEAD_STATES"
+      | ANIMATE_TRACE -> "ANIMATE_TRACE" 
       (* ── I/O and export/ import ── *)
       | PRINT -> "PRINT"
       | VISUALIZE -> "VISUALIZE"

@@ -2,6 +2,8 @@ import json
 import os
 import random
 import subprocess
+import math 
+import webbrowser
 from collections import defaultdict, deque
 
 try:
@@ -16,7 +18,7 @@ __all__ = [
     'determinize', 'minimize', 'regex_to_nfa', 'nfa_to_regex', 'dfa_to_regex',
     'accepts', 'trace', 'equivalent', 'regex_equivalent', 'validate',
     'subset', 'is_empty', 'is_finite', 'is_minimal', 'is_deterministic',
-    'reachable', 'dead_states',
+    'reachable', 'dead_states', 'animate_trace',
     'dsl_print', 'visualize', 'table', 'stats', 'export', 'import_automaton',
     'str_reverse', 'str_concat', 'chars', 'random_str',
     '_append', '_remove',
@@ -825,7 +827,7 @@ def is_minimal(A) -> bool:
         raise RuntimeError("is_minimal requires a DFA; use is_minimal(determinize(M))")
     before = len(_reachable_ids(m))
     minimal_dfa = _get_machine(minimize(A)) 
-    after  = len(minimal_dfa.states)  # State count is safer than transition count
+    after  = len(minimal_dfa.states) 
     return before == after
 
 def is_deterministic(A) -> bool:
@@ -855,6 +857,605 @@ def dead_states(A) -> list:
             if pred not in can_reach:
                 can_reach.add(pred); wl.append(pred)
     return sorted(f"q{s}" for s in all_ids - can_reach)
+
+def animate_trace(A, input_str: str, output_path: str = None) -> str:
+    name = A.name if isinstance(A, Automaton) else "automaton"
+    is_user_declared = isinstance(A, Automaton) and bool(A._orig_states)
+
+    if is_user_declared:
+        states_list = A._orig_states
+        alphabet    = A._orig_alphabet
+        start_state = A._orig_start
+        final_set   = set(A._orig_final)
+        raw_trans   = A._orig_transitions
+        is_nfa      = (A.kind == "NFA")
+
+        norm_trans = {}
+        for s, sym_map in raw_trans.items():
+            norm_trans[s] = {}
+            for sym, tgts in sym_map.items():
+                norm_trans[s][sym] = set(tgts) if isinstance(tgts, (list, set)) else {tgts}
+        edge_syms = {}
+        for s, sym_map in norm_trans.items():
+            for sym, tgts in sym_map.items():
+                for t in tgts:
+                    edge_syms.setdefault((s, t), []).append(
+                        "ε" if sym == "eps" else sym
+                    )
+        def label_of(s):
+            return str(s)
+        if is_nfa:
+            # ε-closure simulation
+            def eps_closure(states_set):
+                closure = set(states_set)
+                stack   = list(states_set)
+                while stack:
+                    st = stack.pop()
+                    for t in norm_trans.get(st, {}).get("ε", set()):
+                        if t not in closure:
+                            closure.add(t); stack.append(t)
+                return frozenset(closure)
+            def move(states_set, sym):
+                result = set()
+                for st in states_set:
+                    result |= norm_trans.get(st, {}).get(sym, set())
+                return result
+            cur_set = eps_closure({start_state})
+            steps = [{"state_set": cur_set, "sym": None, "from_set": None}]
+            dead  = False
+            for ch in input_str:
+                nxt_set = eps_closure(move(cur_set, ch))
+                steps.append({"state_set": nxt_set, "sym": ch, "from_set": cur_set})
+                if not nxt_set:
+                    dead = True
+                    break
+                cur_set = nxt_set
+            accepted = (not dead) and bool(cur_set & final_set)
+            
+            def get_edges_at_step(step_idx):
+                if step_idx == 0: return []
+                s = steps[step_idx]
+                if not s["from_set"] or not s["state_set"]: return []
+                sym = s["sym"]
+                pairs = []
+                for f in s["from_set"]:
+                    for t in norm_trans.get(f, {}).get(sym, set()):
+                        if t in s["state_set"]:
+                            pairs.append((f, t))
+                return pairs
+
+        else:
+            cur = start_state
+            steps = [{"state": cur, "sym": None, "from": None}]
+            dead  = False
+            for ch in input_str:
+                nxt = list(norm_trans.get(cur, {}).get(ch, [None]))[0] \
+                      if norm_trans.get(cur, {}).get(ch) else None
+                steps.append({"state": nxt, "sym": ch, "from": cur})
+                if nxt is None:
+                    dead = True; break
+                cur = nxt
+            accepted = (not dead) and (cur in final_set)
+
+    else:
+        m = _get_machine(A)
+        if isinstance(m, NFA):
+            from collections import deque as _deque
+            def _eps_cl(states_set, transitions):
+                cl = set(states_set)
+                stk = list(states_set)
+                while stk:
+                    st = stk.pop()
+                    for t in transitions.get(st, {}).get('ε', set()):
+                        if t not in cl:
+                            cl.add(t); stk.append(t)
+                return frozenset(cl)
+            def _mv(states_set, sym, transitions):
+                r = set()
+                for st in states_set:
+                    r |= transitions.get(st, {}).get(sym, set())
+                return r
+            alphabet_set = m.alphabet
+            start_cl = _eps_cl({m.start}, m.transitions)
+            sid = {start_cl: 0}
+            wl  = [start_cl]
+            dfa_trans = {}
+            dfa_accept = set()
+            while wl:
+                cur_cl = wl.pop(0)
+                cid    = sid[cur_cl]
+                dfa_trans[cid] = {}
+                if cur_cl & m.accept:
+                    dfa_accept.add(cid)
+                for sym in alphabet_set:
+                    nxt_cl = _eps_cl(_mv(cur_cl, sym, m.transitions), m.transitions)
+                    if not nxt_cl: continue
+                    if nxt_cl not in sid:
+                        sid[nxt_cl] = len(sid); wl.append(nxt_cl)
+                    dfa_trans[cid][sym] = sid[nxt_cl]
+
+            states_list = sorted(dfa_trans.keys())
+            start_state = sid[start_cl]
+            final_set   = dfa_accept
+            norm_trans  = {s: {sym: {t} for sym, t in tr.items()}
+                           for s, tr in dfa_trans.items()}
+            is_nfa      = False
+        else:
+            states_list = sorted(m.min_transitions.keys())
+            start_state = m.min_start
+            final_set   = m.min_accept
+            norm_trans  = {s: {sym: {t} for sym, t in tr.items()}
+                           for s, tr in m.min_transitions.items()}
+            is_nfa      = False
+        edge_syms = {}
+        for s, sym_map in norm_trans.items():
+            for sym, tgts in sym_map.items():
+                for t in tgts:
+                    edge_syms.setdefault((s, t), []).append(sym)
+        def label_of(s):
+            return f"q{s}"
+        cur = start_state
+        steps = [{"state": cur, "sym": None, "from": None}]
+        dead  = False
+        for ch in input_str:
+            nxt = list(norm_trans.get(cur, {}).get(ch, [None]))[0] \
+                  if norm_trans.get(cur, {}).get(ch) else None
+            steps.append({"state": nxt, "sym": ch, "from": cur})
+            if nxt is None:
+                dead = True; break
+            cur = nxt
+        accepted = (not dead) and (cur in final_set)
+        
+    n   = len(states_list)
+    CX  = 400
+    CY  = 350
+    R   = max(110, min(250, 80 + n * 25))   
+    SR  = 26                                 
+    def spos(s):
+        i     = states_list.index(s)
+        angle = (2 * math.pi * i / max(n, 1)) - math.pi / 2 
+        return round(CX + R * math.cos(angle), 1), \
+               round(CY + R * math.sin(angle), 1)
+    pos = {s: spos(s) for s in states_list}
+    curve_of = {}
+    seen_pairs = set()
+    for (s1, s2) in list(edge_syms):
+        if (s1, s2) in seen_pairs: continue
+        seen_pairs.add((s1, s2)); seen_pairs.add((s2, s1))
+        if (s2, s1) in edge_syms and s1 != s2:
+            curve_of[(s1, s2)] =  30
+            curve_of[(s2, s1)] = -30
+        else:
+            curve_of[(s1, s2)] = 0
+    def arrow_path(s1, s2):
+        co      = curve_of.get((s1, s2), 0)
+        x1, y1  = pos[s1]
+        x2, y2  = pos[s2]
+        if s1 == s2:
+            dx_out = x1 - CX
+            dy_out = y1 - CY
+            ln_out = max((dx_out**2 + dy_out**2) ** 0.5, 1)
+            ux, uy = dx_out / ln_out, dy_out / ln_out
+            px, py = -uy, ux
+            off = SR + 8
+            lx1 = x1 + ux * off + px * SR * 0.5
+            ly1 = y1 + uy * off + py * SR * 0.5
+            lx2 = x1 + ux * off - px * SR * 0.5
+            ly2 = y1 + uy * off - py * SR * 0.5
+            cx1 = x1 + ux * (off + 46) + px * 38
+            cy1 = y1 + uy * (off + 46) + py * 38
+            cx2 = x1 + ux * (off + 46) - px * 38
+            cy2 = y1 + uy * (off + 46) - py * 38
+            return (f"M {round(lx1,1)} {round(ly1,1)} "
+                    f"C {round(cx1,1)} {round(cy1,1)}, "
+                    f"{round(cx2,1)} {round(cy2,1)}, "
+                    f"{round(lx2,1)} {round(ly2,1)}")
+        dx, dy = x2 - x1, y2 - y1
+        ln = max((dx**2 + dy**2) ** 0.5, 1)
+        ux, uy = dx / ln, dy / ln
+        sx, sy = x1 + ux * SR, y1 + uy * SR   
+        ex, ey = x2 - ux * SR, y2 - uy * SR   
+        if co:
+            mx = (sx + ex) / 2 - uy * co
+            my = (sy + ey) / 2 + ux * co
+            return f"M {sx} {sy} Q {round(mx,1)} {round(my,1)} {ex} {ey}"
+        return f"M {sx} {sy} L {ex} {ey}"
+    
+    def lbl_pos(s1, s2):
+        co      = curve_of.get((s1, s2), 0)
+        x1, y1  = pos[s1]
+        x2, y2  = pos[s2]
+        if s1 == s2:
+            dx_out = x1 - CX
+            dy_out = y1 - CY
+            ln_out = max((dx_out**2 + dy_out**2) ** 0.5, 1)
+            ux, uy = dx_out / ln_out, dy_out / ln_out
+            lx = x1 + ux * (SR + 60)
+            ly = y1 + uy * (SR + 60)
+            return round(lx, 1), round(ly, 1)
+        dx, dy = x2 - x1, y2 - y1
+        ln = max((dx**2 + dy**2) ** 0.5, 1)
+        perp_scale = 20 + abs(co) * 0.5
+        mx = (x1 + x2) / 2 - (dy / ln) * perp_scale
+        my = (y1 + y2) / 2 + (dx / ln) * perp_scale
+        return round(mx, 1), round(my, 1)
+        
+    edge_id = {}
+    for (s1, s2) in edge_syms:
+        safe1 = str(s1).replace("-", "m")
+        safe2 = str(s2).replace("-", "m")
+        edge_id[(s1, s2)] = f"e_{safe1}_{safe2}"
+    svg_edges = []
+    for (s1, s2), syms in edge_syms.items():
+        eid   = edge_id[(s1, s2)]
+        path  = arrow_path(s1, s2)
+        lx, ly = lbl_pos(s1, s2)
+        label = ", ".join(sorted(set(syms)))
+        svg_edges.append(
+            f'<path id="{eid}" d="{path}" class="edge" fill="none" '
+            f'stroke="#475569" stroke-width="1.8" marker-end="url(#ah)"/>\n'
+            f'<text id="{eid}_lbl" x="{lx}" y="{ly}" class="elbl">{label}</text>'
+        )
+    svg_states = []
+    for s in states_list:
+        x, y      = pos[s]
+        is_accept = s in final_set
+        is_start  = (s == start_state)
+        double = (f'<circle cx="{x}" cy="{y}" r="{SR+7}" fill="none" '
+                  f'stroke="#22c55e" stroke-width="1.4" opacity="0.55"/>') \
+                 if is_accept else ""
+        if is_start:
+            dx_in   = CX - x
+            dy_in   = CY - y
+            ln_in   = max((dx_in**2 + dy_in**2) ** 0.5, 1)
+            ax1 = x - (dx_in / ln_in) * (SR + 46)
+            ay1 = y - (dy_in / ln_in) * (SR + 46)
+            ax2 = x - (dx_in / ln_in) * (SR + 2)
+            ay2 = y - (dy_in / ln_in) * (SR + 2)
+            start_arr = (f'<line x1="{round(ax1,1)}" y1="{round(ay1,1)}" '
+                         f'x2="{round(ax2,1)}" y2="{round(ay2,1)}" '
+                         f'stroke="#64748b" stroke-width="1.8" '
+                         f'marker-end="url(#ah)"/>')
+        else:
+            start_arr = ""
+
+        safe_s = str(s).replace("-", "m")
+        svg_states.append(
+            f'{start_arr}{double}'
+            f'<circle id="st_{safe_s}" cx="{x}" cy="{y}" r="{SR}" '
+            f'class="snode{" acc" if is_accept else ""}" '
+            f'fill="#1e293b" stroke="#475569" stroke-width="2"/>'
+            f'<text x="{x}" y="{y}" class="slbl" '
+            f'dominant-baseline="central" text-anchor="middle">'
+            f'{label_of(s)}</text>'
+        )
+
+    svg_edges_html  = "\n  ".join(svg_edges)
+    svg_states_html = "\n  ".join(svg_states)
+    
+    if is_nfa and is_user_declared:
+        js_step_list = []
+        edge_sets    = []
+        for i, step in enumerate(steps):
+            cur_set  = step["state_set"]
+            from_set = step["from_set"]
+            sym      = step["sym"]
+            js_step_list.append({
+                "states":    sorted(str(s) for s in cur_set),
+                "from_states": sorted(str(s) for s in from_set) if from_set else [],
+                "sym":       sym,
+                "dead":      len(cur_set) == 0,
+                "accept":    bool(cur_set & final_set),
+            })
+            active_eids = []
+            if i > 0 and from_set and cur_set:
+                ch = sym
+                for f in from_set:
+                    for t in norm_trans.get(f, {}).get(ch, set()):
+                        if t in cur_set and (f, t) in edge_id:
+                            active_eids.append(edge_id[(f, t)])
+            edge_sets.append(list(set(active_eids)))
+    else:
+        js_step_list = []
+        edge_sets    = []
+        for i, step in enumerate(steps):
+            state = step["state"]
+            frm   = step["from"]
+            sym   = step["sym"]
+            js_step_list.append({
+                "state":  str(state) if state is not None else None,
+                "from":   str(frm)   if frm   is not None else None,
+                "sym":    sym,
+                "dead":   state is None,
+                "accept": state in final_set if state is not None else False,
+            })
+            active_eids = []
+            if i > 0 and frm is not None and state is not None:
+                k = (frm, state)
+                if k in edge_id:
+                    active_eids = [edge_id[k]]
+            edge_sets.append(active_eids)
+            
+    safe_id = {s: str(s).replace("-", "m") for s in states_list}
+    js_state_ids = json.dumps({str(s): f"st_{safe_id[s]}" for s in states_list})
+
+    js_steps      = json.dumps(js_step_list)
+    js_edge_sets  = json.dumps(edge_sets)
+    js_edge_lbl   = json.dumps({eid: f"{eid}_lbl" for eid in edge_id.values()})
+    js_accepted   = "true" if accepted else "false"
+    js_input      = json.dumps(list(input_str))
+    js_is_nfa     = "true" if (is_nfa and is_user_declared) else "false"
+    total_steps   = len(steps) - 1
+    char_boxes = "".join(
+        f'<div class="cb" id="cb_{i}">{ch}</div>'
+        for i, ch in enumerate(input_str)
+    ) or "<span class='empty-note'>empty string &epsilon;</span>"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>animate_trace — {name} on "{input_str}"</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0f172a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;
+     display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:28px 16px}}
+h1{{font-size:1.1rem;font-weight:500;color:#94a3b8;margin-bottom:4px}}
+h2{{font-size:.8rem;color:#64748b;margin-bottom:20px;letter-spacing:.04em}}
+#wrap{{background:#1e293b;border:1px solid #334155;border-radius:16px;
+      padding:14px;width:100%;max-width:800px;margin-bottom:16px}}
+svg{{width:100%;height:auto;display:block}}
+.snode{{transition:fill .3s,stroke .3s,stroke-width .2s}}
+.slbl{{fill:#e2e8f0;font-size:12.5px;font-weight:500;pointer-events:none}}
+.acc{{stroke:#22c55e!important}}
+.edge{{transition:stroke .3s,stroke-width .25s}}
+.elbl{{fill:#64748b;font-size:10.5px;text-anchor:middle;dominant-baseline:central;pointer-events:none}}
+.s-current{{fill:#1d4ed8!important;stroke:#60a5fa!important;stroke-width:3!important}}
+.s-visited{{fill:#14532d!important;stroke:#22c55e!important;stroke-width:2.5!important}}
+.s-dead{{fill:#7f1d1d!important;stroke:#ef4444!important;stroke-width:3!important}}
+.e-active{{stroke:#f59e0b!important;stroke-width:3!important}}
+.el-active{{fill:#f59e0b!important;font-weight:700}}
+@keyframes pulse{{0%,100%{{r:26px}}50%{{r:30px}}}}
+.pulsing{{animation:pulse .85s ease-in-out infinite}}
+#irow{{display:flex;gap:6px;align-items:center;margin-bottom:16px;
+      flex-wrap:wrap;justify-content:center}}
+.cb{{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;
+    justify-content:center;font-size:1rem;font-weight:600;
+    border:2px solid #334155;background:#1e293b;color:#94a3b8;transition:all .3s}}
+.cb.cur{{background:#1d4ed8;border-color:#60a5fa;color:#fff}}
+.cb.done{{background:#14532d;border-color:#22c55e;color:#86efac}}
+.cb.dead{{background:#7f1d1d;border-color:#ef4444;color:#fca5a5}}
+.empty-note{{color:#64748b;font-size:.85rem}}
+#panel{{background:#1e293b;border:1px solid #334155;border-radius:12px;
+       padding:12px 20px;margin-bottom:16px;width:100%;max-width:800px;
+       min-height:50px;text-align:center}}
+#txt{{font-size:.95rem;color:#e2e8f0}}
+#badge{{display:none;margin-top:7px;padding:3px 16px;border-radius:999px;
+       font-size:.8rem;font-weight:600}}
+.ok{{background:#14532d;color:#86efac;border:1px solid #22c55e}}
+.fail{{background:#7f1d1d;color:#fca5a5;border:1px solid #ef4444}}
+#ctrl{{display:flex;gap:10px;align-items:center;margin-bottom:16px}}
+button{{background:#334155;border:1px solid #475569;color:#e2e8f0;
+       border-radius:8px;padding:7px 18px;font-size:.85rem;cursor:pointer;
+       transition:background .2s}}
+button:hover:not(:disabled){{background:#475569}}
+button:disabled{{opacity:.35;cursor:not-allowed}}
+#bplay{{background:#1d4ed8;border-color:#3b82f6}}
+#bplay:hover:not(:disabled){{background:#2563eb}}
+#ctr{{color:#64748b;font-size:.8rem;min-width:80px;text-align:center}}
+#legend{{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}}
+.leg{{display:flex;align-items:center;gap:5px;font-size:.73rem;color:#64748b}}
+.ld{{width:11px;height:11px;border-radius:50%;border:2px solid}}
+.le{{width:18px;height:3px;border-radius:2px}}
+</style>
+</head>
+<body>
+<h1>AutomataGen &mdash; animate_trace</h1>
+<h2>
+  <strong style="color:#e2e8f0">{name}</strong>
+  &ensp;&middot;&ensp;
+  {"NFA (ε-closure simulation)" if is_nfa and is_user_declared else "DFA"}
+  &ensp;&middot;&ensp;
+  input: &ldquo;{input_str}&rdquo;
+</h2>
+
+<div id="wrap">
+<svg viewBox="0 0 800 700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke"
+            stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  {svg_edges_html}
+  {svg_states_html}
+</svg>
+</div>
+
+<div id="irow">
+  <span style="color:#64748b;font-size:.8rem;margin-right:4px">input:</span>
+  {char_boxes}
+</div>
+
+<div id="panel">
+  <div id="txt">Press Play or Next to begin the trace.</div>
+  <span id="badge"></span>
+</div>
+
+<div id="ctrl">
+  <button id="bprev" onclick="go(-1)" disabled>&#8592; Prev</button>
+  <button id="bplay" onclick="playPause()">&#9654; Play</button>
+  <button id="bnext" onclick="go(1)">Next &#8594;</button>
+  
+  <div style="display:flex;align-items:center;gap:8px;background:#1e293b;padding:4px 10px;border-radius:8px;border:1px solid #334155;margin-left:5px;">
+    <span style="color:#94a3b8;font-size:.75rem;">Speed:</span>
+    <input type="range" id="speed" min="200" max="2000" value="900" step="100" style="direction:rtl">
+  </div>
+  
+  <span id="ctr">step 0 / {total_steps}</span>
+</div>
+
+<div id="legend">
+  <div class="leg"><div class="ld" style="background:#1d4ed8;border-color:#60a5fa"></div>current</div>
+  <div class="leg"><div class="ld" style="background:#14532d;border-color:#22c55e"></div>visited</div>
+  <div class="leg"><div class="ld" style="background:#7f1d1d;border-color:#ef4444"></div>dead</div>
+  <div class="leg"><div class="ld" style="background:#1e293b;border-color:#22c55e"></div>accept</div>
+  <div class="leg"><div class="le" style="background:#f59e0b"></div>active edge</div>
+</div>
+
+<script>
+const STEPS      = {js_steps};
+const EDGE_SETS  = {js_edge_sets};
+const STATE_IDS  = {js_state_ids};
+const EDGE_LBL   = {js_edge_lbl};
+const ACCEPTED   = {js_accepted};
+const INPUT      = {js_input};
+const IS_NFA     = {js_is_nfa};
+const TOTAL      = STEPS.length - 1;
+
+let cur = 0, playing = false, timer = null;
+
+/* helpers */
+const gel   = id => document.getElementById(id);
+const stEl  = sid => gel(STATE_IDS[sid]);
+const cbEl  = i   => gel('cb_' + i);
+
+function clearAll() {{
+  document.querySelectorAll('[id^="st_"]').forEach(e =>
+    e.classList.remove('s-current','s-visited','s-dead','pulsing'));
+  document.querySelectorAll('.edge').forEach(e => e.classList.remove('e-active'));
+  document.querySelectorAll('.elbl').forEach(e => e.classList.remove('el-active'));
+  for (let i = 0; i < INPUT.length; i++) {{
+    const b = cbEl(i); if (b) b.classList.remove('cur','done','dead');
+  }}
+}}
+
+function activeStates(step) {{
+  const s = STEPS[step];
+  if (IS_NFA) return s.dead ? [] : (s.states || []);
+  return s.dead ? [] : (s.state != null ? [s.state] : []);
+}}
+
+function render(step) {{
+  clearAll();
+  const s = STEPS[step];
+
+  const visited = new Set();
+  for (let i = 1; i < step; i++) {{
+    const prev = STEPS[i];
+    const prevActive = IS_NFA ? (prev.states || []) : (prev.state != null ? [prev.state] : []);
+    prevActive.forEach(sid => visited.add(sid));
+  }}
+  visited.forEach(sid => {{
+    const e = stEl(sid); if (e) e.classList.add('s-visited');
+  }});
+
+  const curStates = activeStates(step);
+  if (curStates.length > 0) {{
+    curStates.forEach(sid => {{
+      const e = stEl(sid);
+      if (e) {{ e.classList.remove('s-visited'); e.classList.add('s-current','pulsing'); }}
+    }});
+  }} else if (step > 0) {{
+    const prevActive = activeStates(step - 1);
+    prevActive.forEach(sid => {{
+      const e = stEl(sid);
+      if (e) {{ e.classList.remove('s-current','pulsing'); e.classList.add('s-dead'); }}
+    }});
+  }}
+
+  const eids = EDGE_SETS[step] || [];
+  eids.forEach(eid => {{
+    const e = gel(eid); if (e) e.classList.add('e-active');
+    const l = gel(EDGE_LBL[eid]); if (l) l.classList.add('el-active');
+  }});
+
+  for (let i = 0; i < INPUT.length; i++) {{
+    const b = cbEl(i); if (!b) continue;
+    const consumedCount = step - 1;   
+    if (s.dead && i === consumedCount) b.classList.add('dead');
+    else if (i < consumedCount)        b.classList.add('done');
+    else if (i === consumedCount)      b.classList.add('cur');
+  }}
+
+  const txt   = gel('txt');
+  const badge = gel('badge');
+  badge.style.display = 'none';
+
+  if (step === 0) {{
+    const startLabel = IS_NFA ? '{{' + (s.states || []).join(', ') + '}}' : s.state;
+    txt.innerHTML = 'Start: state <strong>' + startLabel + '</strong>';
+  }} else if (s.dead) {{
+    txt.innerHTML = 'Read <strong>&ldquo;' + s.sym + '&rdquo;</strong>'
+      + ' &rarr; <em>no transition &mdash; string rejected</em>';
+    badge.textContent = 'REJECTED'; badge.className = 'fail';
+    badge.style.display = 'inline-block';
+  }} else {{
+    const fromLabel = IS_NFA ? '{{' + (STEPS[step-1].states || []).join(', ') + '}}' : s.from;
+    const toLabel = IS_NFA ? '{{' + (s.states || []).join(', ') + '}}' : s.state;
+    txt.innerHTML = 'Read <strong>&ldquo;' + s.sym + '&rdquo;</strong>: ' + fromLabel + ' &rarr; ' + toLabel;
+
+    if (step === TOTAL) {{
+      badge.textContent = ACCEPTED ? 'ACCEPTED' : 'REJECTED';
+      badge.className   = ACCEPTED ? 'ok' : 'fail';
+      badge.style.display = 'inline-block';
+    }}
+  }}
+
+  gel('ctr').textContent  = 'step ' + step + ' / ' + TOTAL;
+  gel('bprev').disabled   = (step === 0);
+  gel('bnext').disabled   = (step >= TOTAL);
+}}
+
+function go(d) {{
+  cur = Math.max(0, Math.min(TOTAL, cur + d));
+  render(cur);
+}}
+
+// FIXED: Added tick function to handle dynamic speed changes
+function tick() {{
+    if (cur >= TOTAL) {{
+        clearInterval(timer); playing = false;
+        gel('bplay').innerHTML = '&#9654; Play'; return;
+    }}
+    cur++; render(cur);
+}}
+
+function playPause() {{
+  const b = gel('bplay');
+  if (playing) {{
+    clearInterval(timer); playing = false; b.innerHTML = '&#9654; Play';
+  }} else {{
+    if (cur >= TOTAL) cur = 0;
+    playing = true; b.innerHTML = '&#9646;&#9646; Pause';
+    timer = setInterval(tick, parseInt(gel('speed').value));
+  }}
+}}
+
+// FIXED: Slider event listener updates speed instantly
+gel('speed').oninput = function() {{
+    if(playing) {{
+        clearInterval(timer);
+        timer = setInterval(tick, parseInt(this.value));
+    }}
+}};
+
+render(0);
+</script>
+</body>
+</html>"""
+    if output_path is None:
+        safe_input = input_str.replace("/","").replace("\\","") or "empty"
+        output_path = f"trace_{name}_{safe_input}.html"
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"[animate_trace] Saved → {output_path}")
+    try:
+        webbrowser.open("file://" + os.path.abspath(output_path))
+    except Exception:
+        pass
+    return output_path
 
 # I/O formatting
 def dsl_print(val) -> None:
