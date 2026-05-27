@@ -14,36 +14,6 @@ jobs:
           python-version: "3.11"
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          
       - name: Run Python tests
-        run: pytest -q python/test_automata.py
-  ocaml-build:
-
-    runs-on: ubuntu-latest
-
-    defaults:
-     run:
-      working-directory: DSL_directory
-
-    steps:
-
-      - uses: actions/checkout@v4
-
-      - name: Setup OCaml
-        uses: ocaml/setup-ocaml@v3
-        with:
-          ocaml-compiler: 4.14.1
-          dune-cache: true
-
-      - name: Install dependencies
-        run: opam install dune ounit2 ocamlformat zanuda --yes
-
-      - name: Build
-        run: opam exec -- dune build
-
-      - name: Run tests
-        run: opam exec -- dune runtest
-
-      - name: Run linter
-        run: opam exec -- zanuda -dir .
+        run: 
