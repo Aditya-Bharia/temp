@@ -1,265 +1,245 @@
-# Music Downloader
+# Esee Music Downloader
 
-A simple, fast desktop app to download songs from Apple Music playlists.
+A fast desktop downloader for Apple Music playlists with live progress, multi-provider search, metadata embedding, and a clean browser frontend.
 
-Features
+---
 
-Paste Apple Music playlist URL
+## Table of Contents
 
-Auto-extract song names
+- [What This Does](#what-this-does)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Backend](#backend)
+- [Frontend](#frontend)
+- [Usage](#usage)
+- [Supported URLs](#supported-urls)
+- [Providers](#providers)
+- [Downloads](#downloads)
+- [Troubleshooting](#troubleshooting)
+- [Project Layout](#project-layout)
+- [Production](#production)
+- [License](#license)
 
-Search 5+ music providers
+---
 
-Parallel downloads
+## What This Does
 
-Real-time progress & speed
+Esee Music Downloader takes an Apple Music playlist URL, extracts track names automatically, searches multiple providers for audio sources, and downloads songs with real-time progress and retry handling.
 
-Pause/Resume
+The frontend communicates with a FastAPI backend over WebSocket, so you can watch speed, ETA, and status updates while downloads run.
 
-Retry failed downloads
+---
 
-Skip duplicates
+## Features
 
-Embed metadata & album art
+- Paste an Apple Music playlist URL and extract tracks automatically
+- Search 5+ music providers for each song
+- Parallel downloads with retries and duplicate detection
+- Real-time progress, speed, and queue updates
+- Pause / resume support
+- Embed metadata and album art into downloaded files
+- Browser-based dashboard with live WebSocket updates
+- Download queue and automatic fallback providers
 
-Setup
+---
 
-Backend
+## Quick Start
 
-cd backend
-pip install -r requirements.txt
-python main.py
+### Prerequisites
 
-Runs on http://localhost:8000WebSocket: ws://localhost:8000/ws
+- Python 3.9+
+- Node.js 16+ and npm
+- ffmpeg installed and available in `PATH`
+- Windows / Mac / Linux
 
-Frontend
+### Install ffmpeg
 
-cd frontend
-npm install
-npm run dev
+**Windows (Chocolatey):**
 
-Runs on http://localhost:5173
-
-Providers
-
-YouTube (yt-dlp)
-
-SoundCloud
-
-Jamendo
-
-Audius
-
-Mr-Jatt (fallback)
-
-Usage
-
-Paste Apple Music playlist URL
-
-Click "Download"
-
-Watch real-time progress
-
-Songs save to ./downloads/
-
-Downloads Location
-
-./downloads/ (created automatically)
-
-Requirements
-
-Python 3.9+
-
-Node.js 16+
-
-Windows/Mac/Linux
-
-Setup & Installation Guide
-
-Prerequisites
-
-Python 3.9+
-
-Node.js 16+ & npm
-
-Windows 10/11 or Mac/Linux
-
-ffmpeg (for best results with yt-dlp)
-
-Quick Start
-
-1. Install ffmpeg
-
-Windows (using Chocolatey):
-
+```bash
 choco install ffmpeg
+```
 
-Windows (manual):
+**Windows manual:**
 
-Download from https://ffmpeg.org/download.html
+- Download from https://ffmpeg.org/download.html
+- Add `ffmpeg` to `PATH`
 
-Add to PATH
+**Mac:**
 
-Mac:
-
+```bash
 brew install ffmpeg
+```
 
-Linux:
+**Linux:**
 
+```bash
 sudo apt-get install ffmpeg
+```
 
-2. Backend Setup
+---
 
+## Backend
+
+```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-
-# Activate venv
-# Windows:
-venv\Scripts\activate
-# Mac/Linux:
-source venv/bin/activate
-
-# Install dependencies
+venv\Scripts\activate     # Windows
+# source venv/bin/activate # Mac/Linux
 pip install -r requirements.txt
-
-# Run server
 python main.py
+```
 
-Server will run on http://localhost:8000
+Backend runs on `http://localhost:8000`
 
-Check health: http://localhost:8000/api/health
+Health check: `http://localhost:8000/api/health`
 
-3. Frontend Setup
+---
+
+## Frontend
 
 In a new terminal:
 
+```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run dev server
 npm run dev
+```
 
-Frontend will run on http://localhost:5173
+Frontend runs on `http://localhost:5173`
 
-Usage
+---
 
-Open http://localhost:5173 in browser
+## Usage
 
-Paste Apple Music playlist URL
+1. Open `http://localhost:5173`
+2. Paste an Apple Music playlist URL
+3. Click `EXTRACT SONGS`
+4. Watch downloads start automatically
+5. Monitor progress and speed in real time
 
-Click "EXTRACT SONGS"
+Downloads are saved to `./backend/downloads/` by default.
 
-Downloads start automatically
+---
 
-Watch real-time progress
+## Supported URLs
 
-Songs save to ./backend/downloads/
+- Apple Music playlist URLs: `https://music.apple.com/*/playlist/...`
+- Direct song URLs
+- Playlist share links
 
-Supported URLs
+---
 
-Apple Music: https://music.apple.com/*/playlist/...
+## Providers
 
-Direct song URLs
+**Primary:**
 
-Playlist shares
+- YouTube
 
-Providers
+**Secondary:**
 
-Primary (Most reliable):
+- SoundCloud
+- Jamendo
+- Audius
+- Mr-Jatt (fallback)
 
-YouTube
+---
 
-Secondary:
+## Downloads
 
-SoundCloud (public tracks)
+All downloaded files are stored under `./backend/downloads/`.
 
-Jamendo (royalty-free)
+The folder is created automatically when downloads begin.
 
-Audius (web3 music)
+---
 
-Troubleshooting
+## Troubleshooting
 
-WebSocket connection fails
+### WebSocket connection fails
 
-Make sure backend is running on port 8000
+- Ensure the backend is running on port `8000`
+- Check firewall settings
+- Reload the frontend page
 
-Check firewall settings
+### Songs not found
 
-Try reloading frontend
+- Use a more specific song query
+- Verify the track exists on YouTube or another provider
+- Some videos may be geographically restricted
 
-Songs not found
+### Download errors
 
-Try more specific song names
+- Check your internet connection
+- Try a different provider
+- Increase `DOWNLOAD_TIMEOUT` in `backend/config.py`
 
-Check YouTube has the song available
+### No audio extracted
 
-Some videos may be geographically blocked
+- Confirm `ffmpeg` is installed and in `PATH`
+- Update `yt-dlp` with `pip install --upgrade yt-dlp`
 
-Download errors
+---
 
-Check internet connection
+## Project Layout
 
-Try different provider
-
-Increase DOWNLOAD_TIMEOUT in backend/config.py
-
-No audio extracted
-
-Make sure ffmpeg is installed and in PATH
-
-yt-dlp may need update: pip install --upgrade yt-dlp
-
-Performance Tips
-
-Increase MAX_CONCURRENT_DOWNLOADS in backend/config.py for faster parallel downloads (default: 3)
-
-Close other bandwidth-heavy apps
-
-Wired internet connection recommended
-
-Features Demo
-
-Real-time Progress: Live speed and ETA
-
-Parallel Downloads: Multiple songs at once
-
-Error Recovery: Auto-retry failed downloads
-
-Duplicate Skip: Won't re-download songs
-
-Queue System: Automatic sequential processing
-
-Dark Neon UI: Cyberpunk-style dashboard
-
-File Structure
-
-music-downloader/
+```
+eseee/
 ├── backend/
-│   ├── main.py              (FastAPI server)
-│   ├── models.py            (SQLite models)
-│   ├── scrapers.py          (Apple Music scraper)
-│   ├── downloader.py        (Download manager)
-│   ├── ws_manager.py        (WebSocket handler)
-│   ├── providers_youtube.py (YouTube provider)
-│   ├── providers_other.py   (Other providers)
+│   ├── main.py
+│   ├── config.py
+│   ├── downloader.py
+│   ├── providers_youtube.py
+│   ├── providers_other.py
+│   ├── scrapers.py
+│   ├── ws_manager.py
 │   ├── requirements.txt
-│   └── downloads/           (Downloaded songs)
+│   └── downloads/
 ├── frontend/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   ├── index.css
-│   │   ├── pages/
-│   │   ├── components/
-│   │   └── hooks/
 │   ├── index.html
 │   ├── package.json
-│   └── vite.config.js
-└── README.md
+│   ├── vite.config.js
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   └── src/
+│       ├── App.jsx
+│       ├── main.jsx
+│       ├── index.css
+│       ├── components/
+│       └── hooks/
+└── readme.md
+```
+
+---
+
+## Production
+
+### Frontend build
+
+```bash
+cd frontend
+npm run build
+```
+
+### Backend production
+
+On Windows:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+On Mac/Linux:
+
+```bash
+pip install gunicorn
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+```
+
+---
+
+## License
+
+MIT
 
 Database
 
