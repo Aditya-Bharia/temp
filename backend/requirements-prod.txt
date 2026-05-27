@@ -1,0 +1,18 @@
+# ============================================================================
+# requirements-prod.txt - Production Python dependencies
+# ============================================================================
+
+fastapi==0.104.1
+uvicorn==0.24.0
+gunicorn==21.2.0
+yt-dlp==2024.1.1
+aiohttp==3.9.1
+aiofiles==23.2.1
+beautifulsoup4==4.12.2
+lxml==4.9.3
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+slowapi==0.1.8
+pydantic==2.5.0
+pydantic-settings==2.1.0
