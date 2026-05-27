@@ -1,4 +1,0 @@
-(executable
- (public_name dsl_directory)
- (name main)
- (libraries tokenizer my_utils ast parser check codegen unix))

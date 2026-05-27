@@ -1,470 +1,521 @@
-# AutomataGen DSL
+# Music Downloader
 
-AutomataGen is a domain-specific language for working with finite automata end to end: you can define NFAs/DFAs, transform them, verify language properties, and generate visual and machine-readable outputs.
+A simple, fast desktop app to download songs from Apple Music playlists.
 
-The goal of this project is to make automata workflows practical and scriptable. Instead of manually writing one-off Python code for each experiment, you can express automata tasks in a compact DSL and run them as reproducible programs.
+Features
 
-AutomataGen is useful for:
+Paste Apple Music playlist URL
 
-- learning and teaching automata concepts with executable examples
-- rapidly prototyping formal-language ideas
-- validating machines with semantic checks before runtime execution
-- generating outputs (tables, stats, JSON, DOT, PNG) that are easy to inspect and share
+Auto-extract song names
 
-The project uses a hybrid compilation/runtime pipeline:
+Search 5+ music providers
 
-- OCaml front-end for lexing, parsing, semantic checks, and code generation
-- Python runtime for automata algorithms and visualization/export functionality
+Parallel downloads
 
-In short, write `.agen` programs, let the OCaml front-end validate and transpile them, and let the Python runtime execute the algorithms.
+Real-time progress & speed
 
-## What This DSL Supports
+Pause/Resume
 
-The language is intentionally broad. You can combine automata declarations, control flow, and automata operations in one program.
+Retry failed downloads
 
-### Core capabilities
+Skip duplicates
 
-- Declare `NFA` and `DFA` machines with explicit states/alphabet/start/final/transitions
-- Use epsilon transitions via `eps` in NFAs
-- Compose machines with language operators (`union`, `intersection`, `difference`, etc.)
-- Transform machines (`determinize`, `minimize`, regex conversions)
-- Analyze behavior (`accepts`, `trace`, `equivalent`, `subset`, `is_empty`, etc.)
-- Print tabular/statistical output and render/export machines (`table`, `stats`, `visualize`, `export`, `import`)
-- Use regular programming constructs (`var`, `fn`, `if`, `while`, `for`, `return`, arithmetic, booleans, lists, indexing)
+Embed metadata & album art
 
-## Repository Layout
+Setup
 
-- `DSL_directory/`: OCaml compiler-like pipeline for the DSL
-- `DSL_directory/lib/tokenizer.ml`: lexer
-- `DSL_directory/lib/parser.ml`: recursive-descent parser
-- `DSL_directory/lib/check.ml`: semantic checker
-- `DSL_directory/lib/codegen.ml`: transpiler from DSL AST to Python
-- `DSL_directory/bin/main.ml`: CLI runner (`dune exec dsl_directory -- ...`)
-- `DSL_directory/source-code/`: sample `.agen` programs
-- `DSL_directory/test/`: OCaml tests
-- `python/runtime.py`: runtime library used by generated Python code
-- `python/automata.py`: separate Python automata module
-- `python/test_automata.py`: Python tests
-- `docs/design.md`: high-level design notes
+Backend
 
-## End-to-End Execution Model
+cd backend
+pip install -r requirements.txt
+python main.py
 
-For a DSL input file:
+Runs on http://localhost:8000WebSocket: ws://localhost:8000/ws
 
-1. Tokenize source text
-2. Parse into AST
-3. Run semantic checks
-4. Generate Python code (`from runtime import *` + translated program)
-5. Write generated file to `/tmp/<name>.generated.py`
-6. Execute with `python3` (unless `--emit-only` is set)
+Frontend
 
-CLI options:
+cd frontend
+npm install
+npm run dev
 
-- `--tokens`: print lexer output before parsing
-- `--emit-only`: generate Python but do not execute it
+Runs on http://localhost:5173
 
-## Setup
+Providers
 
-### Clone from GitHub
+YouTube (yt-dlp)
 
-If you are starting from GitHub, use:
+SoundCloud
 
-```bash
-git clone https://github.com/<your-org-or-user>/AutomataGEN.git
-cd AutomataGEN
-```
+Jamendo
 
-Then install dependencies and run the DSL.
+Audius
 
-### Prerequisites
+Mr-Jatt (fallback)
 
-- OCaml + dune (project uses dune language 3.14)
-- Python 3.11+
-- Optional for visualization/export PNG: Graphviz system CLI (`dot`) and Python package `graphviz`
+Usage
 
-### Install dependencies
+Paste Apple Music playlist URL
 
-Recommended (PEP 668-safe): use a local virtual environment.
+Click "Download"
 
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
-```
+Watch real-time progress
 
-Install Graphviz system binaries if you want PNG exports:
+Songs save to ./downloads/
 
-```bash
-# Ubuntu/Debian
-sudo apt-get install graphviz
-```
+Downloads Location
 
-### One-command setup and build
+./downloads/ (created automatically)
 
-From the project root, run:
+Requirements
 
-```bash
-bash setup.sh
-```
+Python 3.9+
 
-This script will:
+Node.js 16+
 
-- auto-install system dependencies on apt-based Linux when missing: `python3-venv`, `python3-pip`, `ocaml`, `opam`, `graphviz`, `python3-graphviz`
-- create a local virtual environment at `.venv`
-- install Python dependencies from `requirements.txt` into `.venv`
-- initialize opam and activate opam environment in-script
-- install `dune` via opam if missing
-- install OCaml dependencies via opam
-- run `dune build bin/main.exe` inside `DSL_directory`
+Windows/Mac/Linux
 
-### Step-by-step: How to test setup.sh
+Setup & Installation Guide
 
-Run these steps from a fresh terminal.
+Prerequisites
 
-1. Go to project root.
+Python 3.9+
 
-```bash
-cd ~/AutomataGEN
-```
+Node.js 16+ & npm
 
-2. Run setup.
+Windows 10/11 or Mac/Linux
 
-```bash
-bash setup.sh
-```
+ffmpeg (for best results with yt-dlp)
 
-3. Verify required tools are available after setup.
+Quick Start
 
-```bash
-python3 -m pip --version
-opam --version
-dune --version
-dot -V
-.venv/bin/python -m pip --version
-```
+1. Install ffmpeg
 
-4. Verify build artifact exists.
+Windows (using Chocolatey):
 
-```bash
-test -f DSL_directory/_build/default/bin/main.exe && echo "build ok"
-```
+choco install ffmpeg
 
-5. Run sample DSL program.
+Windows (manual):
 
-```bash
-cd DSL_directory
-dune exec dsl_directory -- source-code/all_features.agen
-```
+Download from https://ffmpeg.org/download.html
 
-6. Verify expected output files were generated.
+Add to PATH
 
-```bash
-test -f all_features.json && echo "json ok"
-test -f all_features.png && echo "png ok"
-test -f automaton.png && echo "visualize ok"
-```
+Mac:
 
-## Build and Run
+brew install ffmpeg
 
-From the project root:
+Linux:
 
-```bash
-cd DSL_directory
-dune build bin/main.exe
-```
+sudo apt-get install ffmpeg
 
-Run a DSL program:
+2. Backend Setup
 
-```bash
-dune exec dsl_directory -- source-code/all_features.agen
-```
+cd backend
 
-Emit generated Python only:
+# Create virtual environment
+python -m venv venv
 
-```bash
-dune exec dsl_directory -- source-code/all_features.agen --emit-only
-```
+# Activate venv
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
 
-Sample emitted output:
+# Install dependencies
+pip install -r requirements.txt
 
-```text
-Semantic check passed - executing program...
-Generated Python written to: /tmp/all_features.generated.py
-```
+# Run server
+python main.py
 
-Run Python tests:
+Server will run on http://localhost:8000
 
-```bash
-.venv/bin/pytest -q python/test_automata.py
-```
+Check health: http://localhost:8000/api/health
 
-Run OCaml tests:
+3. Frontend Setup
 
-```bash
-cd DSL_directory
-dune runtest
-```
+In a new terminal:
 
-Note: full test runs require `ounit2` because test executables depend on it.
+cd frontend
 
-## Quickstart from Fresh Clone
+# Install dependencies
+npm install
 
-Use this exact sequence on a clean machine:
+# Run dev server
+npm run dev
 
-```bash
-# 1) Clone
-git clone https://github.com/<your-org-or-user>/AutomataGEN.git
-cd AutomataGEN
+Frontend will run on http://localhost:5173
 
-# 2) Python dependency (pytest) + optional graphviz Python package
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r requirements.txt
+Usage
 
-# 3) Optional system dependency for PNG rendering/export
-sudo apt-get update
-sudo apt-get install -y graphviz
+Open http://localhost:5173 in browser
 
-# 4) Build DSL runner
-cd DSL_directory
-dune build bin/main.exe
+Paste Apple Music playlist URL
 
-# 5) Run sample DSL program
-dune exec dsl_directory -- source-code/all_features.agen
+Click "EXTRACT SONGS"
 
-# 6) (Optional) Emit generated Python only
-dune exec dsl_directory -- source-code/all_features.agen --emit-only
-```
+Downloads start automatically
 
-If execution succeeds, you should see semantic-check output, stats/table output, and generated artifacts such as `all_features.json`, `all_features.png`, and `automaton.png` in `DSL_directory/`.
+Watch real-time progress
 
-## DSL Syntax Overview
+Songs save to ./backend/downloads/
 
-### Comments
+Supported URLs
 
-- Line comment: `# comment`
-- Block comment: `/* comment */`
+Apple Music: https://music.apple.com/*/playlist/...
 
-### Automaton declaration
+Direct song URLs
 
-```agen
-NFA M {
-    states { q0, q1, q2 }
-    alphabet { a, b }
-    start q0
-    final { q2 }
+Playlist shares
 
-    transition {
-        q0 a -> q0,
-        q0 eps -> q1,
-        q1 b -> q2,
-        q2 b -> q2
-    }
-}
-```
+Providers
 
-For `DFA`, epsilon transitions and nondeterministic duplicate `(state, symbol)` transitions are rejected by semantic checks.
+Primary (Most reliable):
 
-### Statements and control flow
+YouTube
 
-- Variable declaration: `var x = ...`
-- Function declaration: `fn f(a, b) { ... }`
-- If/else: `if cond { ... } else { ... }`
-- While loop: `while cond { ... }`
-- For-in loop: `for item in listExpr { ... }`
-- `return`, `break`, `continue`
+Secondary:
 
-### Expressions
+SoundCloud (public tracks)
 
-- Literals: integers, strings, booleans, lists
-- Arithmetic: `+ - * /`
-- Comparisons: `== != < <= > >=`
-- Boolean: `and or not`
-- Assignment expression: `x = expr`
-- Indexing: `arr[i]`
-- Function calls: `f(x, y)`
+Jamendo (royalty-free)
 
-## Built-in Operations
+Audius (web3 music)
 
-### Language operations
+Troubleshooting
 
-- `union(A, B)`
-- `intersection(A, B)`
-- `difference(A, B)`
-- `complement(A)`
-- `concat_lang(A, B)`
-- `kleene_star(A)`
-- `kleene_plus(A)`
-- `reverse_lang(A)`
+WebSocket connection fails
 
-### Transformations
+Make sure backend is running on port 8000
 
-- `determinize(M)`
-- `minimize(M)`
-- `regex_to_nfa(regex)`
-- `nfa_to_regex(M)`
-- `dfa_to_regex(D)`
+Check firewall settings
 
-### Analysis and checking
+Try reloading frontend
 
-- `accepts(M, word)`
-- `trace(M, word)`
-- `equivalent(A, B)`
-- `regex_equivalent(r1, r2)`
-- `validate(M)`
-- `subset(A, B)`
-- `is_empty(M)`
-- `is_finite(M)`
-- `is_minimal(D)`
-- `is_deterministic(M)`
-- `reachable(M)`
-- `dead_states(M)`
+Songs not found
 
-### I/O and artifacts
+Try more specific song names
 
-- `print(x)`
-- `visualize(M)`
-- `table(M)`
-- `stats(M)`
-- `export(M, "file.json|file.dot|file.png")`
-- `import("file.json")`
+Check YouTube has the song available
 
-### String/list helpers
+Some videos may be geographically blocked
 
-- `reverse(s)`
-- `concat(a, b)`
-- `chars(s)`
-- `random_str(length, alphabet)`
-- `append(list, value)`
-- `remove(list, index)`
+Download errors
 
-## Real Program Example
+Check internet connection
 
-This repository includes a complete sample at `DSL_directory/source-code/all_features.agen`.
+Try different provider
 
-Run:
+Increase DOWNLOAD_TIMEOUT in backend/config.py
 
-```bash
-cd DSL_directory
-dune exec dsl_directory -- source-code/all_features.agen
-```
+No audio extracted
 
-Representative output:
+Make sure ffmpeg is installed and in PATH
 
-```text
-Semantic check passed - executing program...
-[validate] 'D' - all checks passed.
-semantic/runtime checks look good
-abb: rejected
-ab: accepted
-bbb: rejected
+yt-dlp may need update: pip install --upgrade yt-dlp
 
-[stats] DFA: D
-  States        : 3
-  Alphabet      : 2  (a, b)
-  Accept states : 1
-  Transitions   : 6
-  Deterministic : True
-  Empty language: False
+Performance Tips
 
-[export] JSON -> all_features.json
-[export] PNG -> all_features.png
-[visualize] Saved -> automaton.png
-```
+Increase MAX_CONCURRENT_DOWNLOADS in backend/config.py for faster parallel downloads (default: 3)
 
-The sample demonstrates:
+Close other bandwidth-heavy apps
 
-- NFA/DFA declaration
-- transformation and equivalence calls
-- list/string manipulation
-- `if`, `while`, `for`, `continue`, `break`
-- transition tracing and diagnostics
-- export/import and visualization
+Wired internet connection recommended
 
-## Output Image Example
+Features Demo
 
-Example rendered automaton output:
+Real-time Progress: Live speed and ETA
 
-![AutomataGen output image](DSL_directory/all_features.png)
+Parallel Downloads: Multiple songs at once
 
-If the image is not present in your local clone, generate it by running:
+Error Recovery: Auto-retry failed downloads
 
-```bash
-cd DSL_directory
-dune exec dsl_directory -- source-code/all_features.agen
-```
+Duplicate Skip: Won't re-download songs
 
-This creates `DSL_directory/all_features.png` via the DSL `export(..., "all_features.png")` call in the sample program.
+Queue System: Automatic sequential processing
 
-## Example: Transition Table Output
+Dark Neon UI: Cyberpunk-style dashboard
 
-Calling `table(M)` prints a formatted transition table. Example shape:
+File Structure
 
-```text
-  DFA: M_det_min
-  ==========================
-  State        a       b
-  --------------------------
-   *q0         -       q0
-  -> q1        q1      q0
-```
+music-downloader/
+├── backend/
+│   ├── main.py              (FastAPI server)
+│   ├── models.py            (SQLite models)
+│   ├── scrapers.py          (Apple Music scraper)
+│   ├── downloader.py        (Download manager)
+│   ├── ws_manager.py        (WebSocket handler)
+│   ├── providers_youtube.py (YouTube provider)
+│   ├── providers_other.py   (Other providers)
+│   ├── requirements.txt
+│   └── downloads/           (Downloaded songs)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   ├── index.css
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── hooks/
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+└── README.md
 
-Legend:
+Database
 
-- `->` start state
-- `*` accept state
-- `-` missing transition
+SQLite database auto-created at: ./backend/music_downloader.db
 
-## Semantic Checker Behavior
+Tracks:
 
-The checker catches name and automaton consistency errors before Python execution.
+Downloads (status, progress, errors)
 
-Examples of checks:
+Playlists (metadata)
 
-- use of undeclared variables/functions
-- duplicate declarations and reserved/builtin name redefinition
-- invalid automaton shape (unknown states/symbols, duplicate DFA transitions, epsilon in DFA)
-- illegal control flow (`break` outside loop, `return` outside function)
-- DFA-only function misuse on NFA in selected operations (`complement`, `dfa_to_regex`, `is_minimal`)
+Stopping the App
 
-Failure output format:
+Frontend: Ctrl+C in npm terminal
 
-```text
-Semantic check failed with N error(s):
-  [1] line X col Y: ...
-  [2] line X col Y: ...
-```
+Backend: Ctrl+C in Python terminal
 
-## Output Artifacts
+Building for Production
 
-Generated assets depend on your DSL program:
+Frontend:
 
-- generated Python source: `/tmp/<input>.generated.py`
-- visualization image: `automaton.png` by default from `visualize(...)`
-- export files: JSON/DOT/PNG based on target extension
+cd frontend
+npm run build
+# Creates dist/ folder
 
-## Current Practical Notes
+Backend:Use a production ASGI server like Gunicorn:
 
-- `visualize()` requires Python package `graphviz`
-- PNG export via `export(..., ".png")` requires Graphviz CLI (`dot`)
-- Runner auto-configures `PYTHONPATH` to find `python/runtime.py`
-- Checker expects automata arguments to many language ops as references (variables), which is why samples assign intermediate results before reuse
+pip install gunicorn
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
 
-## Quick Command Reference
+License
 
-```bash
-# Build executable
-cd DSL_directory && dune build bin/main.exe
+MIT
 
-# Run sample program
-cd DSL_directory && dune exec dsl_directory -- source-code/all_features.agen
 
-# Emit generated Python only
-cd DSL_directory && dune exec dsl_directory -- source-code/all_features.agen --emit-only
 
-# Show lexer tokens while running
-cd DSL_directory && dune exec dsl_directory -- source-code/all_features.agen --tokens
+Setup & Installation Guide
 
-# Python tests
-.venv/bin/pytest -q python/test_automata.py
-```
+Prerequisites
+
+Python 3.9+
+
+Node.js 16+ & npm
+
+Windows 10/11 or Mac/Linux
+
+ffmpeg (for best results with yt-dlp)
+
+Quick Start
+
+1. Install ffmpeg
+
+Windows (using Chocolatey):
+
+choco install ffmpeg
+
+Windows (manual):
+
+Download from https://ffmpeg.org/download.html
+
+Add to PATH
+
+Mac:
+
+brew install ffmpeg
+
+Linux:
+
+sudo apt-get install ffmpeg
+
+2. Backend Setup
+
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate venv
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run server
+python main.py
+
+Server will run on http://localhost:8000
+
+Check health: http://localhost:8000/api/health
+
+3. Frontend Setup
+
+In a new terminal:
+
+cd frontend
+
+# Install dependencies
+npm install
+
+# Run dev server
+npm run dev
+
+Frontend will run on http://localhost:5173
+
+Usage
+
+Open http://localhost:5173 in browser
+
+Paste Apple Music playlist URL
+
+Click "EXTRACT SONGS"
+
+Downloads start automatically
+
+Watch real-time progress
+
+Songs save to ./backend/downloads/
+
+Supported URLs
+
+Apple Music: https://music.apple.com/*/playlist/...
+
+Direct song URLs
+
+Playlist shares
+
+Providers
+
+Primary (Most reliable):
+
+YouTube
+
+Secondary:
+
+SoundCloud (public tracks)
+
+Jamendo (royalty-free)
+
+Audius (web3 music)
+
+Troubleshooting
+
+WebSocket connection fails
+
+Make sure backend is running on port 8000
+
+Check firewall settings
+
+Try reloading frontend
+
+Songs not found
+
+Try more specific song names
+
+Check YouTube has the song available
+
+Some videos may be geographically blocked
+
+Download errors
+
+Check internet connection
+
+Try different provider
+
+Increase DOWNLOAD_TIMEOUT in backend/config.py
+
+No audio extracted
+
+Make sure ffmpeg is installed and in PATH
+
+yt-dlp may need update: pip install --upgrade yt-dlp
+
+Performance Tips
+
+Increase MAX_CONCURRENT_DOWNLOADS in backend/config.py for faster parallel downloads (default: 3)
+
+Close other bandwidth-heavy apps
+
+Wired internet connection recommended
+
+Features Demo
+
+Real-time Progress: Live speed and ETA
+
+Parallel Downloads: Multiple songs at once
+
+Error Recovery: Auto-retry failed downloads
+
+Duplicate Skip: Won't re-download songs
+
+Queue System: Automatic sequential processing
+
+Dark Neon UI: Cyberpunk-style dashboard
+
+File Structure
+
+music-downloader/
+├── backend/
+│   ├── main.py              (FastAPI server)
+│   ├── models.py            (SQLite models)
+│   ├── scrapers.py          (Apple Music scraper)
+│   ├── downloader.py        (Download manager)
+│   ├── ws_manager.py        (WebSocket handler)
+│   ├── providers_youtube.py (YouTube provider)
+│   ├── providers_other.py   (Other providers)
+│   ├── requirements.txt
+│   └── downloads/           (Downloaded songs)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── main.jsx
+│   │   ├── index.css
+│   │   ├── pages/
+│   │   ├── components/
+│   │   └── hooks/
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+└── README.md
+
+Database
+
+SQLite database auto-created at: ./backend/music_downloader.db
+
+Tracks:
+
+Downloads (status, progress, errors)
+
+Playlists (metadata)
+
+Stopping the App
+
+Frontend: Ctrl+C in npm terminal
+
+Backend: Ctrl+C in Python terminal
+
+Building for Production
+
+Frontend:
+
+cd frontend
+npm run build
+# Creates dist/ folder
+
+Backend:Use a production ASGI server like Gunicorn:
+
+pip install gunicorn
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+
+License
+
+MITlsinit.py    models.py             requirements.txtpycache    music_downloader.db   scrapers.pyconfig.py      package-lock.json     ws_manager.pydownloader.py  providers_other.pymain.py        providers_youtube.py
+
+
+
+/frontend$ lsindex.html    package-lock.json  postcss.config.js  tailwind.config.jsnode_modules  package.json       src                vite.config.js
