@@ -71,6 +71,24 @@ body {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .btn-neon {
   @apply px-6 py-2 rounded-lg font-bold transition-all duration-300 hover:shadow-neon;
   background: linear-gradient(135deg, #00f0ff, #9000ff);
@@ -80,6 +98,12 @@ body {
 .btn-neon:hover {
   transform: scale(1.05);
   box-shadow: 0 0 20px rgba(0, 240, 255, 0.8), 0 0 40px rgba(144, 0, 255, 0.5);
+}
+
+.btn-neon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: scale(1);
 }
 
 .input-neon {
@@ -97,3 +121,61 @@ body {
 .input-neon::placeholder {
   color: rgba(0, 240, 255, 0.3);
 }
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .glass {
+    border-radius: 8px;
+  }
+
+  .btn-neon {
+    @apply px-4 py-2 text-sm;
+  }
+
+  .neon-text {
+    text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+  }
+
+  /* Grid responsive */
+  @apply grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+
+  .glass {
+    padding: 16px;
+  }
+
+  .neon-text {
+    font-size: 1.5rem;
+  }
+}
+
+/* Loading animation */
+.loading {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* Utility animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.smooth-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+

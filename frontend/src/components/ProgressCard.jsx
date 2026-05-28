@@ -11,11 +11,11 @@ export default function ProgressCard({ label, value, color, isText }) {
   const [textColor, bgColor] = colorMap[color]?.split(' ') || ['text-neon-blue', 'from-neon-blue/20']
 
   return (
-    <div className={`glass p-6 rounded-xl border border-${color}/30 bg-gradient-to-br ${bgColor} to-transparent`}>
+    <div className={`glass p-4 md:p-6 rounded-xl border border-${color}/30 bg-gradient-to-br ${bgColor} to-transparent smooth-transition hover:scale-105`}>
       <div className="text-xs text-neon-blue/50 uppercase tracking-wider mb-2">
         {label}
       </div>
-      <div className={`text-3xl font-bold ${textColor}`}>
+      <div className={`text-2xl md:text-3xl font-bold ${textColor}`}>
         {isText ? String(value).substring(0, 20) : value}
       </div>
     </div>

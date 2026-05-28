@@ -1,0 +1,177 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: music_redis_prod
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: music_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_DB: music_downloader
+      POSTGRES_USER: music_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U music_user -d music_downloader"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: music_backend_prod
+    restart: always
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql://music_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/music_downloader
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/downloads:/app/downloads
+      - ./backend/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: music_worker_prod
+    restart: always
+    env_file: .env.prod
+    environment:
+      DATABASE_URL: postgresql://music_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/music_downloader
+      REDIS_URL: redis://redis:6379/0
+    command: ["python", "-m", "backend.worker"]
+    volumes:
+      - ./backend/downloads:/app/downloads
+      - ./backend/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: music_frontend_prod
+    restart: always
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  nginx:
+    image: nginx:alpine
+    container_name: music_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.frontend.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.backend.conf:/etc/nginx/conf.d/backend.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - music_network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  music_network:
+    driver: bridge

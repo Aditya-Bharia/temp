@@ -2,38 +2,33 @@ import React, { useState, useEffect } from 'react'
 import './index.css'
 import Dashboard from './pages/Dashboard'
 import useWebSocket from './hooks/useWebSocket'
+import { DownloadProvider } from './context/DownloadContext'
 
 export default function App() {
+  return (
+    <DownloadProvider>
+      <AppContent />
+    </DownloadProvider>
+  )
+}
+
+function AppContent() {
   const [playlistUrl, setPlaylistUrl] = useState('')
-  const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(false)
-  const [playlistId, setPlaylistId] = useState(null)
-  const [stats, setStats] = useState({
-    total: 0,
-    completed: 0,
-    failed: 0,
-    current_song: ''
-  })
+  const [showDashboard, setShowDashboard] = useState(false)
 
   const ws = useWebSocket('ws://localhost:8000/ws')
 
+  // Load state from storage on mount
   useEffect(() => {
-    if (!ws) return
-
-    const handleMessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'stats') {
-          setStats(data)
-        }
-      } catch (e) {
-        console.error('WebSocket message error:', e)
+    const saved = localStorage.getItem('music_downloader_state')
+    if (saved) {
+      const state = JSON.parse(saved)
+      if (state.playlistId && state.songs.length > 0) {
+        setShowDashboard(true)
       }
     }
-
-    ws.addEventListener('message', handleMessage)
-    return () => ws.removeEventListener('message', handleMessage)
-  }, [ws])
+  }, [])
 
   const handleExtractPlaylist = async () => {
     if (!playlistUrl.trim()) {
@@ -52,9 +47,7 @@ export default function App() {
       if (!response.ok) throw new Error('Failed to extract playlist')
 
       const data = await response.json()
-      setSongs(data.songs)
-      setPlaylistId(data.playlist_id)
-      setStats({ total: data.total, completed: 0, failed: 0, current_song: '' })
+      setShowDashboard(true)
     } catch (error) {
       alert('Error: ' + error.message)
     } finally {
@@ -69,14 +62,14 @@ export default function App() {
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-neon-purple/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative z-10 p-6 max-w-7xl mx-auto">
-        {!songs.length ? (
+      <div className="relative z-10 p-4 md:p-6 max-w-7xl mx-auto">
+        {!showDashboard ? (
           <div className="flex flex-col items-center justify-center min-h-screen">
-            <div className="glass p-12 rounded-2xl max-w-xl w-full border-2 border-neon-blue/50">
-              <h1 className="neon-text text-4xl font-bold mb-2 text-center">
+            <div className="glass p-8 md:p-12 rounded-2xl max-w-xl w-full border-2 border-neon-blue/50">
+              <h1 className="neon-text text-2xl md:text-4xl font-bold mb-2 text-center">
                 MUSIC DOWNLOADER
               </h1>
-              <div className="text-neon-blue/60 text-center mb-8">
+              <div className="text-neon-blue/60 text-center mb-8 text-sm md:text-base">
                 Extract → Search → Download
               </div>
 
@@ -111,12 +104,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <Dashboard
-            playlistId={playlistId}
-            songs={songs}
-            stats={stats}
-            ws={ws}
-          />
+          <Dashboard ws={ws} onBack={() => setShowDashboard(false)} />
         )}
       </div>
     </div>

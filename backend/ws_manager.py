@@ -29,18 +29,22 @@ class WebSocketManager:
             "eta_seconds": int(eta)
         })
 
-    async def send_download_complete(self, download_id: int, file_path: str):
+    async def send_download_complete(self, download_id: int, file_path: str, song_name: str = None, provider: str = None):
         await self.broadcast({
             "type": "download_complete",
             "download_id": download_id,
-            "file_path": file_path
+            "file_path": file_path,
+            "song_name": song_name,
+            "provider": provider
         })
 
-    async def send_error(self, download_id: int, error: str):
+    async def send_error(self, download_id: int, error: str, song_name: str = None, retry_count: int = 0):
         await self.broadcast({
             "type": "error",
             "download_id": download_id,
-            "error": error
+            "error": error,
+            "song_name": song_name,
+            "retry_count": retry_count
         })
 
     async def send_stats(self, total: int, completed: int, failed: int, current_song: str):
@@ -52,4 +56,18 @@ class WebSocketManager:
             "current_song": current_song
         })
 
+    async def send_queue_update(self, queue_length: int, active: int):
+        await self.broadcast({
+            "type": "queue_update",
+            "queue_length": queue_length,
+            "active": active
+        })
+
+    async def send_connection_ready(self):
+        await self.broadcast({
+            "type": "connection_ready",
+            "timestamp": str(__import__('datetime').datetime.utcnow())
+        })
+
 manager = WebSocketManager()
+

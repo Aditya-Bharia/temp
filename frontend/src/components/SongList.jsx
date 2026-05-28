@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 
-export default function SongList({ downloads }) {
+export default function SongList({ downloads, onRetry, onCancel }) {
+  const [retryCounts, setRetryCounts] = useState({})
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
@@ -24,6 +26,13 @@ export default function SongList({ downloads }) {
         return '⟳'
       default:
         return '○'
+    }
+  }
+
+  const handleRetry = async (id) => {
+    if (onRetry) {
+      await onRetry(id)
+      setRetryCounts(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }))
     }
   }
 
@@ -63,12 +72,40 @@ export default function SongList({ downloads }) {
                     <span>{d.speed?.toFixed(2)} MB/s</span>
                     <span>ETA: {d.eta}s</span>
                   </div>
+                  {onCancel && (
+                    <button
+                      onClick={() => onCancel(d.id)}
+                      className="mt-2 px-3 py-1 text-xs rounded bg-neon-pink/20 hover:bg-neon-pink/30 border border-neon-pink/50 text-neon-pink"
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </>
               )}
 
-              {d.error && (
-                <div className="text-xs text-red-300 mt-2">
-                  {d.error}
+              {d.status === 'failed' && (
+                <div>
+                  <div className="text-xs text-red-300 mb-2">
+                    {d.error}
+                  </div>
+                  <div className="flex gap-2">
+                    {onRetry && (
+                      <button
+                        onClick={() => handleRetry(d.id)}
+                        className="flex-1 px-3 py-1 text-xs rounded bg-neon-blue/20 hover:bg-neon-blue/30 border border-neon-blue/50 text-neon-blue"
+                      >
+                        Retry {retryCounts[d.id] ? `(${retryCounts[d.id]})` : ''}
+                      </button>
+                    )}
+                    {onCancel && (
+                      <button
+                        onClick={() => onCancel(d.id)}
+                        className="flex-1 px-3 py-1 text-xs rounded bg-neon-pink/20 hover:bg-neon-pink/30 border border-neon-pink/50 text-neon-pink"
+                      >
+                        Dismiss
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
