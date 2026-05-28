@@ -1,0 +1,53 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: music_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: music_backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/downloads:/app/downloads
+      - ./backend/logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: music_worker
+    env_file: .env
+    command: ["python", "backend/worker.py"]
+    volumes:
+      - ./backend:/app/backend
+      - ./backend/downloads:/app/downloads
+      - ./backend/logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: music_frontend
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+
+
+
+
+

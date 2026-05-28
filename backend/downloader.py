@@ -4,11 +4,19 @@ import asyncio
 from pathlib import Path
 import time
 from datetime import datetime
-from config import DOWNLOADS_DIR, CHUNK_SIZE, MAX_CONCURRENT_DOWNLOADS, DOWNLOAD_TIMEOUT
-from models import Download, DownloadStatus, SessionLocal
-from ws_manager import manager
-from providers_youtube import search_youtube, get_youtube_download_url
-from providers_other import search_jamendo
+from .settings import Settings
+from .models import Download, DownloadStatus, SessionLocal
+from .ws_manager import manager
+from .providers_youtube import search_youtube, get_youtube_download_url
+from .providers_other import search_jamendo
+from pathlib import Path
+import re
+
+_settings = Settings()
+DOWNLOADS_DIR = Path(_settings.downloads_dir)
+CHUNK_SIZE = _settings.chunk_size
+MAX_CONCURRENT_DOWNLOADS = _settings.max_concurrent_downloads
+DOWNLOAD_TIMEOUT = _settings.download_timeout
 import mutagen
 from mutagen.mp3 import MP3
 import io
@@ -64,10 +72,22 @@ class DownloadManager:
 
                         total_size = int(resp.headers.get('content-length', 0))
 
-                        async with aiofiles.open(file_path, 'wb') as f:
+                        # sanitize file_path - ensure inside downloads dir
+                        dest = Path(file_path)
+                        try:
+                            dest_relative = dest.relative_to(DOWNLOADS_DIR)
+                        except Exception:
+                            # sanitize filename and place inside downloads dir
+                            safe_name = re.sub(r"[^0-9A-Za-z._-]", "_", dest.name)
+                            dest = DOWNLOADS_DIR / safe_name
+
+                        async with aiofiles.open(dest, 'wb') as f:
                             async for chunk in resp.content.iter_chunked(CHUNK_SIZE):
                                 if download_id not in self.active_downloads:
-                                    Path(file_path).unlink(missing_ok=True)
+                                    try:
+                                        Path(dest).unlink()
+                                    except Exception:
+                                        pass
                                     return
 
                                 if download_id in self.paused_downloads:
@@ -89,10 +109,11 @@ class DownloadManager:
                 if download:
                     download.status = DownloadStatus.COMPLETED
                     download.downloaded_size = downloaded
+                    download.file_path = str(dest)
                     download.completed_at = datetime.utcnow()
                     db.commit()
 
-                await manager.send_download_complete(download_id, str(file_path))
+                await manager.send_download_complete(download_id, str(dest))
 
         except Exception as e:
             db = SessionLocal()
@@ -132,5 +153,6 @@ class DownloadManager:
         """Cancel a download"""
         self.active_downloads.pop(download_id, None)
         self.paused_downloads.discard(download_id)
-
-manager_instance = DownloadManager()
+# Note: do NOT create a global manager instance here to avoid import-side effects.
+# The application should create and manage a DownloadManager instance at startup
+__all__ = ["DownloadManager"]

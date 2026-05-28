@@ -1,21 +1,27 @@
-import os
+"""Legacy config kept for compatibility. Use `settings.py` for production-grade configuration.
+Small shim that exposes legacy constants while new code uses `settings.Settings`.
+"""
 from pathlib import Path
-from dotenv import load_dotenv
+from .settings import Settings
 
-load_dotenv()
+_settings = Settings()
 
 BASE_DIR = Path(__file__).parent.parent
-DOWNLOADS_DIR = BASE_DIR / "downloads"
-DATABASE_URL = "sqlite:///./music_downloader.db"
+DOWNLOADS_DIR = Path(_settings.downloads_dir)
+DATABASE_URL = _settings.database_url
+DEBUG = _settings.debug
+MAX_CONCURRENT_DOWNLOADS = _settings.max_concurrent_downloads
+DOWNLOAD_TIMEOUT = _settings.download_timeout
+CHUNK_SIZE = _settings.chunk_size
+LOG_LEVEL = _settings.log_level
 
-# Directory creation handled in FastAPI startup event
-
-DEBUG = True
-MAX_CONCURRENT_DOWNLOADS = 3
-DOWNLOAD_TIMEOUT = 300
-CHUNK_SIZE = 8192
-
-APPLE_MUSIC_TIMEOUT = 10
-SEARCH_TIMEOUT = 15
-
-LOG_LEVEL = "INFO"
+__all__ = [
+	"BASE_DIR",
+	"DOWNLOADS_DIR",
+	"DATABASE_URL",
+	"DEBUG",
+	"MAX_CONCURRENT_DOWNLOADS",
+	"DOWNLOAD_TIMEOUT",
+	"CHUNK_SIZE",
+	"LOG_LEVEL",
+]
